@@ -6,11 +6,15 @@ output:
   rmarkdown::html_vignette:
     toc: true
     toc_depth: 2
-    css: albers.css
+params:
+  family: "lapis"
+  base_size: 13
+  content_width: 80
 vignette: >
   %\VignetteIndexEntry{Getting started with hrfdecoder}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
+css: albers.css
 ---
 
 ```{r setup, include=FALSE}
@@ -28,11 +32,10 @@ knitr::opts_chunk$set(
 set.seed(123)
 options(pillar.sigfig = 7, width = 80)
 
-# Set theme if ggplot2 and hrfdecode are available
-if (requireNamespace("ggplot2", quietly = TRUE) &&
-    requireNamespace("hrfdecode", quietly = TRUE)) {
-  ggplot2::theme_set(hrfdecode::theme_albers())
-}
+# Set theme using albersdown if available
+library(ggplot2)
+if (requireNamespace("albersdown", quietly = TRUE)) {
+  theme_set(albersdown::theme_albers(params$family, base_size = params$base_size))
 ```
 
 ## Goal {#goal}
@@ -139,7 +142,6 @@ signal_conv <- stats::convolve(signal, rev(hrf_vec), type = "open")[1:n_trs]
 Y_train <- matrix(rnorm(n_trs * n_voxels, sd = 1), n_trs, n_voxels)
 for (v in 1:n_voxels) {
   Y_train[, v] <- Y_train[, v] + signal_conv * true_pattern[v] * 0.5
-}
 
 dim(Y_train)
 ```
@@ -207,7 +209,6 @@ The `predict()` method supports two modes:
 Y_test <- matrix(rnorm(n_trs * n_voxels, sd = 1), n_trs, n_voxels)
 for (v in 1:n_voxels) {
   Y_test[, v] <- Y_test[, v] + signal_conv * true_pattern[v] * 0.5
-}
 
 # TR-level predictions
 pred_tr <- predict_hrfdecoder(fit, Y_test = Y_test, mode = "tr")
@@ -252,7 +253,7 @@ if (requireNamespace("ggplot2", quietly = TRUE)) {
   ggplot(plot_df, aes(x = trial, y = prediction, color = condition)) +
     geom_point(size = 2.5) +
     geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
-    hrfdecode::scale_color_albers() +
+    albersdown::scale_color_albers(params$family) +
     labs(
       title = "Trial-level decoder predictions",
       subtitle = "Weakly supervised decoder correctly separates conditions",
@@ -260,7 +261,6 @@ if (requireNamespace("ggplot2", quietly = TRUE)) {
       y = "Soft label prediction",
       color = "Condition"
     )
-}
 ```
 
 ## Next steps {#next-steps}

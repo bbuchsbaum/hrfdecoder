@@ -6,7 +6,11 @@ output:
   rmarkdown::html_vignette:
     toc: true
     toc_depth: 2
-    css: albers.css
+params:
+  family: "lapis"
+  base_size: 13
+  content_width: 80
+css: albers.css
 vignette: >
   %\VignetteIndexEntry{AR prewhitening for temporal autocorrelation}
   %\VignetteEngine{knitr::rmarkdown}
@@ -28,10 +32,10 @@ knitr::opts_chunk$set(
 set.seed(123)
 options(pillar.sigfig = 7, width = 80)
 
-if (requireNamespace("ggplot2", quietly = TRUE) &&
-    requireNamespace("hrfdecode", quietly = TRUE)) {
-  ggplot2::theme_set(hrfdecode::theme_albers())
-}
+library(ggplot2)
+if (requireNamespace("albersdown", quietly = TRUE)) {
+      theme_set(albersdown::theme_albers(params$family, base_size = params$base_size))
+
 ```
 
 ## Goal {#goal}
@@ -146,7 +150,6 @@ for (v in 1:n_voxels) {
     eps[t] <- phi_true * eps[t - 1] + rnorm(1)
   }
   Y_ar[, v] <- eps + signal_conv * (v <= n_voxels / 2) * 0.5
-}
 ```
 
 Now fit with and without AR(1) prewhitening to compare.
@@ -230,7 +233,6 @@ for (v in 1:n_voxels) {
     eps2[t] <- phi_run2 * eps2[t - 1] + rnorm(1)
   }
   Y_multi[, v] <- c(eps1, eps2)
-}
 ```
 
 Fit with run-specific AR:
@@ -282,7 +284,6 @@ for (v in 1:n_voxels) {
     eps[t] <- phi_true * eps[t - 1] + rnorm(1)
   }
   Y_test[, v] <- eps + signal_conv * (v <= n_voxels / 2) * 0.5
-}
 
 # Predictions with AR(1) model
 pred_ar1 <- predict_hrfdecoder(fit_ar1, Y_test = Y_test, ev_model_test = ev_model, mode = "trial")
@@ -319,7 +320,7 @@ if (requireNamespace("ggplot2", quietly = TRUE)) {
     geom_point(alpha = 0.7, size = 2) +
     geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
     facet_wrap(~ method, ncol = 1) +
-    hrfdecode::scale_color_albers() +
+    albersdown::scale_color_albers(params$family) +
     labs(
       title = "Effect of AR prewhitening on predictions",
       subtitle = "AR(1) correction improves signal-to-noise ratio",
@@ -327,7 +328,6 @@ if (requireNamespace("ggplot2", quietly = TRUE)) {
       y = "Soft label prediction",
       color = "Condition"
     )
-}
 ```
 
 ## When to use AR prewhitening {#when-to-use}

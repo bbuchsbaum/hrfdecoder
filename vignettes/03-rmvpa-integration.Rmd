@@ -6,7 +6,11 @@ output:
   rmarkdown::html_vignette:
     toc: true
     toc_depth: 2
-    css: albers.css
+params:
+  family: "lapis"
+  base_size: 13
+  content_width: 80
+css: albers.css
 vignette: >
   %\VignetteIndexEntry{Integrating with rMVPA workflows}
   %\VignetteEngine{knitr::rmarkdown}
@@ -28,10 +32,10 @@ knitr::opts_chunk$set(
 set.seed(123)
 options(pillar.sigfig = 7, width = 80)
 
-if (requireNamespace("ggplot2", quietly = TRUE) &&
-    requireNamespace("hrfdecode", quietly = TRUE)) {
-  ggplot2::theme_set(hrfdecode::theme_albers())
-}
+library(ggplot2)
+if (requireNamespace("albersdown", quietly = TRUE)) {
+      theme_set(albersdown::theme_albers(params$family, base_size = params$base_size))
+
 ```
 
 ## Goal {#goal}

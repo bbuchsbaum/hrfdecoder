@@ -6,7 +6,11 @@ output:
   rmarkdown::html_vignette:
     toc: true
     toc_depth: 2
-    css: albers.css
+params:
+  family: "lapis"
+  base_size: 13
+  content_width: 80
+css: albers.css
 vignette: >
   %\VignetteIndexEntry{Weakly supervised learning for fMRI}
   %\VignetteEngine{knitr::rmarkdown}
@@ -28,10 +32,10 @@ knitr::opts_chunk$set(
 set.seed(123)
 options(pillar.sigfig = 7, width = 80)
 
-if (requireNamespace("ggplot2", quietly = TRUE) &&
-    requireNamespace("hrfdecode", quietly = TRUE)) {
-  ggplot2::theme_set(hrfdecode::theme_albers())
-}
+library(ggplot2)
+if (requireNamespace("albersdown", quietly = TRUE)) {
+      theme_set(albersdown::theme_albers(params$family, base_size = params$base_size))
+
 ```
 
 ## Goal {#goal}
@@ -192,7 +196,6 @@ for (i in seq_along(lambda_W_values)) {
   acc <- mean(sign(preds) == true_labels_val)
 
   results[[i]] <- list(lambda_W = lambda_W_values[i], accuracy = acc)
-}
 
 # Select best
 best_idx <- which.max(sapply(results, function(x) x$accuracy))
@@ -266,7 +269,6 @@ signal_conv <- stats::convolve(signal, rev(hrf_vec), type = "open")[1:n_trs]
 Y_data <- matrix(rnorm(n_trs * n_voxels), n_trs, n_voxels)
 for (v in 1:n_voxels) {
   Y_data[, v] <- Y_data[, v] + signal_conv * (v <= n_voxels / 2) * 0.5
-}
 ```
 
 Fit with convergence tracking:
@@ -295,7 +297,6 @@ if (!is.null(fit$convergence$converged)) {
   }
 } else {
   cat("Convergence info not available in this version\n")
-}
 ```
 
 ### Warning signs {#warning-signs}
@@ -337,7 +338,7 @@ if (requireNamespace("ggplot2", quietly = TRUE)) {
   ggplot(plot_df, aes(x = trial, y = soft_label, color = condition)) +
     geom_point(size = 2.5) +
     geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
-    hrfdecode::scale_color_albers() +
+    albersdown::scale_color_albers(params$family) +
     labs(
       title = "Learned soft labels",
       subtitle = "Continuous trial predictions from weakly supervised learning",
@@ -345,7 +346,6 @@ if (requireNamespace("ggplot2", quietly = TRUE)) {
       y = "Soft label value",
       color = "Condition"
     )
-}
 ```
 
 Soft labels can reveal:

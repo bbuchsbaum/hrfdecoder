@@ -1,23 +1,7 @@
 url: ~
 template:
+  package: albersdown
   bootstrap: 5
-  bslib:
-    bg: "#ffffff"
-    fg: "#111111"
-    primary: "#1f6feb"
-    secondary: "#6b7280"
-    base_font: "system-ui"
-    heading_font: "system-ui"
-    code_font: "ui-monospace"
-  includes:
-    in_header: |
-      <style>
-      :root {
-        --albers-bg: #fff;
-        --albers-fg: #111;
-        --albers-accent: #1f6feb;
-      }
-      </style>
 
 navbar:
   structure:

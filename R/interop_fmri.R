@@ -34,25 +34,44 @@ build_condition_basis <- function(ev_model, hrf = NULL) {
   if (is.null(events$run)) {
     events$run <- 1L
   }
-  # Basic validation of runs and onsets
+  # Basic validation of runs and onsets; make sampling frame compatible with events if needed
+  Tlen <- tryCatch(nrow(fmridesign::design_matrix(ev_model)), error = function(e) NULL)
   # Prefer fmrihrf accessor for robust block lengths
   blocklens <- tryCatch(as.integer(fmrihrf::blocklens(sframe)), error = function(e) NULL)
-  if (is.null(blocklens)) {
-    blocklens <- attr(sframe, "blocklens", exact = TRUE) %||% sframe$blocklens
-  }
-  if (is.null(blocklens)) {
-    # Fallback: single block of full length (best-effort)
-    blocklens <- c(nrow(fmridesign::design_matrix(ev_model)))
-  }
-  nblocks <- length(blocklens)
-  if (any(events$run < 1L | events$run > nblocks)) {
-    stop("prepare_decoder_inputs: events$run contains values outside 1..", nblocks)
-  }
+  if (is.null(blocklens)) blocklens <- attr(sframe, "blocklens", exact = TRUE)
+  if (is.null(blocklens)) blocklens <- sframe$blocklens
   TR <- tryCatch(as.numeric(attr(sframe, "TR", exact = TRUE)), error = function(e) NULL)
   if (is.null(TR)) TR <- sframe$TR %||% 2
-  total_time <- sum(blocklens) * TR
-  if (any(events$onset > total_time)) {
-    warning("Some event onsets exceed total acquisition time; they will be ignored downstream.")
+  max_run <- max(events$run, na.rm = TRUE)
+
+  use_rebuilt_sframe <- is.null(blocklens) || length(blocklens) < max_run
+  if (use_rebuilt_sframe && !is.null(Tlen)) {
+    per <- floor(Tlen / max_run)
+    rem <- Tlen - per * max_run
+    blocklens2 <- rep(per, max_run)
+    if (rem > 0) blocklens2[length(blocklens2)] <- blocklens2[length(blocklens2)] + rem
+    blocklens2 <- as.integer(blocklens2)
+    # Ensure TR is scalar as required by fmrihrf::sampling_frame
+    TR_scalar <- suppressWarnings(as.numeric(TR))
+    TR_scalar <- if (length(TR_scalar) >= 1L) TR_scalar[1L] else NA_real_
+    if (is.na(TR_scalar)) TR_scalar <- 2
+    sframe_use <- fmrihrf::sampling_frame(TR = TR_scalar, blocklens = blocklens2)
+    warning(sprintf(
+      "prepare_decoder_inputs: rebuilding sampling_frame with %d blocks (TR=%.3f; blocklens = c(%s)) to match events$run",
+      max_run, TR_scalar, paste(blocklens2, collapse = ", ")
+    ))
+  } else {
+    sframe_use <- sframe
+  }
+  # (Optional) onset range check if we can compute total time
+  bl_chk <- tryCatch(as.integer(fmrihrf::blocklens(sframe_use)), error = function(e) NULL)
+  if (is.null(bl_chk)) bl_chk <- attr(sframe_use, "blocklens", exact = TRUE)
+  if (is.null(bl_chk)) bl_chk <- sframe_use$blocklens
+  if (!is.null(bl_chk) && !is.null(TR)) {
+    total_time <- sum(bl_chk) * TR
+    if (any(events$onset > total_time)) {
+      warning("Some event onsets exceed total acquisition time; they will be ignored downstream.")
+    }
   }
 
   basis_name <- attr(hrf, "name") %||% "spmg1"
@@ -70,7 +89,7 @@ build_condition_basis <- function(ev_model, hrf = NULL) {
     onset ~ fmridesign::hrf(condition, basis = basis_name),
     data = events,
     block = ~ run,
-    sampling_frame = sframe
+    sampling_frame = sframe_use
   )
 
   terms <- fmridesign::event_terms(ev_model2)
@@ -78,9 +97,9 @@ build_condition_basis <- function(ev_model, hrf = NULL) {
     warning("Multiple event terms detected; using the first term for decoding.")
   }
   term <- terms[[1L]]
-  X_list <- fmridesign::condition_basis_list(term, hrf, sframe, output = "condition_list")
+  X_list <- fmridesign::condition_basis_list(term, hrf, sframe_use, output = "condition_list")
   conds <- names(X_list)
-  list(X_list = X_list, hrf = hrf, sframe = sframe, conditions = conds)
+  list(X_list = X_list, hrf = hrf, sframe = sframe_use, conditions = conds)
 }
 
 #' Residualize Y against a baseline model

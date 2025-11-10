@@ -6,7 +6,11 @@ output:
   rmarkdown::html_vignette:
     toc: true
     toc_depth: 2
-    css: albers.css
+params:
+  family: "lapis"
+  base_size: 13
+  content_width: 80
+css: albers.css
 vignette: >
   %\VignetteIndexEntry{Understanding HRF estimation}
   %\VignetteEngine{knitr::rmarkdown}
@@ -28,10 +32,10 @@ knitr::opts_chunk$set(
 set.seed(123)
 options(pillar.sigfig = 7, width = 80)
 
-if (requireNamespace("ggplot2", quietly = TRUE) &&
-    requireNamespace("hrfdecode", quietly = TRUE)) {
-  ggplot2::theme_set(hrfdecode::theme_albers())
-}
+library(ggplot2)
+if (requireNamespace("albersdown", quietly = TRUE)) {
+      theme_set(albersdown::theme_albers(params$family, base_size = params$base_size))
+
 ```
 
 ## Goal {#goal}
@@ -106,7 +110,7 @@ if (requireNamespace("ggplot2", quietly = TRUE)) {
 
   ggplot(plot_df, aes(x = time, y = amplitude, color = component)) +
     geom_line(linewidth = 1.2) +
-    hrfdecode::scale_color_albers() +
+    albersdown::scale_color_albers(params$family) +
     labs(
       title = "SPM HRF basis functions",
       subtitle = "Canonical + temporal derivative allow flexible HRF shapes",
@@ -114,7 +118,6 @@ if (requireNamespace("ggplot2", quietly = TRUE)) {
       y = "Amplitude",
       color = "Component"
     )
-}
 ```
 
 ### Other basis sets {#other-bases}
@@ -208,7 +211,6 @@ signal_conv <- stats::convolve(signal, rev(hrf_shifted_tr), type = "open")[1:n_t
 Y_sim <- matrix(rnorm(n_trs * n_voxels), n_trs, n_voxels)
 for (v in 1:n_voxels) {
   Y_sim[, v] <- Y_sim[, v] + signal_conv * (v <= n_voxels / 2) * 0.6
-}
 ```
 
 Fit with HRF estimation:
@@ -254,7 +256,7 @@ if (requireNamespace("ggplot2", quietly = TRUE)) {
   ggplot(plot_df, aes(x = time, y = amplitude, color = type, linetype = type)) +
     geom_line(linewidth = 1.2) +
     scale_linetype_manual(values = c("Canonical" = "dashed", "Learned" = "solid", "True (shifted)" = "solid")) +
-    hrfdecode::scale_color_albers() +
+    albersdown::scale_color_albers(params$family) +
     labs(
       title = "HRF estimation from simulated data",
       subtitle = "Joint estimation recovers the true delayed-peak HRF",
@@ -263,7 +265,6 @@ if (requireNamespace("ggplot2", quietly = TRUE)) {
       color = "HRF type",
       linetype = "HRF type"
     )
-}
 ```
 
 The learned HRF closely approximates the true shifted HRF, demonstrating successful recovery.
@@ -288,7 +289,6 @@ fit_fixed <- fit_hrfdecoder(
 Y_test <- matrix(rnorm(n_trs * n_voxels), n_trs, n_voxels)
 for (v in 1:n_voxels) {
   Y_test[, v] <- Y_test[, v] + signal_conv * (v <= n_voxels / 2) * 0.6
-}
 
 # Predictions
 pred_learned <- predict_hrfdecoder(fit_hrf, Y_test = Y_test, ev_model_test = ev_model, mode = "trial")
@@ -325,7 +325,6 @@ for (trial in trials) {
   trs_in_window <- get_event_window(trial)
   hrf_weights <- evaluate_hrf(trs_in_window, theta)
   trial_pred <- sum(tr_predictions[trs_in_window] * hrf_weights)
-}
 ```
 
 The `predict()` function with `mode = "trial"` handles this automatically using the learned HRF.
