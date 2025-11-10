@@ -1,0 +1,279 @@
+---
+title: "Getting started with hrfdecoder"
+name: getting-started
+description: "Quick tour of the core workflow for HRF-aware weakly supervised decoding."
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 2
+    css: albers.css
+vignette: >
+  %\VignetteIndexEntry{Getting started with hrfdecoder}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>",
+  fig.align = "center",
+  fig.retina = 2,
+  out.width = "100%",
+  message = FALSE,
+  warning = FALSE,
+  fig.width = 7,
+  fig.asp = 0.618
+)
+set.seed(123)
+options(pillar.sigfig = 7, width = 80)
+
+# Set theme if ggplot2 and hrfdecode are available
+if (requireNamespace("ggplot2", quietly = TRUE) &&
+    requireNamespace("hrfdecode", quietly = TRUE)) {
+  ggplot2::theme_set(hrfdecode::theme_albers())
+}
+```
+
+## Goal {#goal}
+
+Learn how to fit an HRF-aware weakly supervised decoder to fMRI time series data and make predictions on new data.
+
+## TL;DR {#tldr}
+
+```{r tldr, eval=FALSE}
+library(hrfdecode)
+library(fmridesign)
+
+# Fit decoder from fMRI timeseries and event onsets
+fit <- fit_hrfdecoder(
+  Y = fmri_data,           # T × V matrix (time × voxels)
+  event_model = ev_model,  # event_model from fmridesign
+  baseline_model = bl_model
+)
+
+# Predict on new data
+preds <- predict_hrfdecoder(fit, Y_test = test_data, mode = "trial")
+```
+
+## Introduction {#introduction}
+
+Traditional MVPA requires trial-averaged data or explicit trial labels. The `hrfdecode` package takes a different approach: it learns directly from continuous fMRI time series and event timing information. This "weakly supervised" approach jointly estimates:
+
+1. **Soft labels** — continuous trial-level predictions
+2. **HRF parameters** — subject-specific hemodynamic response
+3. **Decoder weights** — multivariate classification function
+
+All three components are optimized together using alternating least squares.
+
+## Setup {#setup}
+
+```{r load}
+library(hrfdecode)
+library(fmridesign)
+```
+
+For this tutorial, we'll create synthetic data that mimics a simple two-class decoding experiment.
+
+```{r synthetic-data}
+# Simulation parameters
+n_trs <- 200        # Number of time points
+n_voxels <- 50      # Number of voxels
+n_trials <- 40      # Number of trials
+tr <- 2             # TR in seconds
+
+# Create event table (onset times and conditions)
+onsets <- seq(10, n_trs * tr - 20, length.out = n_trials)
+conditions <- rep(c("A", "B"), each = n_trials / 2)
+
+event_table <- data.frame(
+  onset = onsets,
+  condition = conditions,
+  duration = 1
+)
+
+head(event_table)
+```
+
+Next, we define the experimental design using the `fmridesign` package.
+
+```{r design}
+# Create event model from event table
+  ev_model <- event_model(
+  onset ~ hrf(condition, basis = "spmg1"),
+  data = event_table,
+  block = ~ 1,
+  sampling_frame = fmrihrf::sampling_frame(TR = tr, blocklens = n_trs)
+)
+
+# Create baseline model (intercept + linear drift)
+  bl_model <- baseline_model(basis = "bs", degree = 3, sframe = fmrihrf::sampling_frame(TR = tr, blocklens = n_trs))
+```
+
+Now simulate fMRI data with signal in a subset of voxels.
+
+```{r simulate-fmri}
+# Generate synthetic BOLD data
+# First half of voxels discriminate condition A vs B
+true_pattern <- c(rep(1, n_voxels / 2), rep(0, n_voxels / 2))
+
+# Build TR-grid stick functions per condition
+stick_A <- rep(0, n_trs)
+stick_B <- rep(0, n_trs)
+idx_A <- pmin(n_trs, pmax(1L, floor(event_table$onset[event_table$condition == "A"] / tr) + 1L))
+idx_B <- pmin(n_trs, pmax(1L, floor(event_table$onset[event_table$condition == "B"] / tr) + 1L))
+stick_A[idx_A] <- 1
+stick_B[idx_B] <- 1
+signal <- stick_A - stick_B
+
+# Convolve with HRF (SPMG2 basis) sampled at TR grid
+hrf_obj <- fmrihrf::getHRF("spmg2")
+span <- attr(hrf_obj, "span") %||% 24
+K <- max(1L, ceiling(span / tr))
+tgrid <- seq(0, (K - 1L) * tr, by = tr)
+hrf_basis <- fmrihrf::evaluate(hrf_obj, tgrid)
+hrf_vec <- as.numeric(hrf_basis %*% c(1, 0))
+signal_conv <- stats::convolve(signal, rev(hrf_vec), type = "open")[1:n_trs]
+
+# Add to random noise
+Y_train <- matrix(rnorm(n_trs * n_voxels, sd = 1), n_trs, n_voxels)
+for (v in 1:n_voxels) {
+  Y_train[, v] <- Y_train[, v] + signal_conv * true_pattern[v] * 0.5
+}
+
+dim(Y_train)
+```
+
+## Fitting the decoder {#fitting}
+
+Now we fit the decoder using `fit_hrfdecoder()`. The key arguments are:
+
+- `Y`: The fMRI data matrix (time × voxels)
+- `event_model`: Event design from `fmridesign`
+- `baseline_model`: Baseline/nuisance model
+- `lambda_W`: Ridge penalty on decoder weights (default: 0.1)
+- `max_iter`: Maximum ALS iterations (default: 10)
+
+```{r fit-decoder}
+fit <- fit_hrfdecoder(
+  Y = Y_train,
+  ev_model = ev_model,
+  base_model = bl_model,
+  lambda_W = 0.1,
+  max_iter = 10,
+  verbose = FALSE
+)
+
+# Inspect fit object
+class(fit)
+names(fit)
+```
+
+The fitted object contains:
+
+- `W`: Decoder weight vector (V × 1)
+- `theta`: HRF basis coefficients
+- `y_soft`: Soft labels (continuous trial predictions)
+- `preproc_params`: Preprocessing metadata (centering, scaling, AR parameters)
+- `convergence`: Convergence diagnostics
+
+## Inspecting decoder weights {#weights}
+
+Let's examine which voxels contribute most to the decoder.
+
+```{r inspect-weights}
+# Get top 10 voxels by absolute weight
+top_voxels <- order(abs(fit$W), decreasing = TRUE)[1:10]
+top_weights <- fit$W[top_voxels]
+
+data.frame(
+  voxel = top_voxels,
+  weight = round(top_weights, 3),
+  true_pattern = true_pattern[top_voxels]
+)
+```
+
+The decoder correctly identifies signal-bearing voxels (those with `true_pattern = 1`).
+
+## Making predictions {#prediction}
+
+The `predict()` method supports two modes:
+
+1. **"tr"** — TR-level predictions (one per time point)
+2. **"trial"** — Trial-level predictions (aggregated across event duration)
+
+```{r predict-tr}
+# Create test data (new noise, same signal)
+Y_test <- matrix(rnorm(n_trs * n_voxels, sd = 1), n_trs, n_voxels)
+for (v in 1:n_voxels) {
+  Y_test[, v] <- Y_test[, v] + signal_conv * true_pattern[v] * 0.5
+}
+
+# TR-level predictions
+pred_tr <- predict_hrfdecoder(fit, Y_test = Y_test, mode = "tr")
+length(pred_tr)  # One prediction per TR
+```
+
+```{r predict-trial}
+# Trial-level predictions (aggregated within event windows)
+pred_trial <- predict_hrfdecoder(fit, Y_test = Y_test, ev_model_test = ev_model, mode = "trial")
+length(pred_trial)  # One prediction per trial
+```
+
+Trial-level predictions aggregate the TR-level signal using HRF-weighted averaging within each event window.
+
+## Evaluating performance {#evaluation}
+
+For a two-class problem, we can compute classification accuracy.
+
+```{r evaluate}
+# Convert event-level probabilities to class predictions
+true_labels <- ifelse(conditions == "A", 1, -1)
+pred_classes <- ifelse(pred_trial$probs[, 1] >= pred_trial$probs[, 2], 1, -1)
+
+# Accuracy
+accuracy <- mean(pred_classes == true_labels)
+cat("Classification accuracy:", round(accuracy * 100, 1), "%\n")
+```
+
+## Visualizing predictions {#visualization}
+
+```{r plot-predictions, fig.cap="Trial-level predictions vs. true condition labels. Positive values indicate condition A, negative values condition B."}
+if (requireNamespace("ggplot2", quietly = TRUE)) {
+  library(ggplot2)
+
+  plot_df <- data.frame(
+    trial = 1:n_trials,
+    prediction = as.numeric(pred_trial$probs[, 1] - pred_trial$probs[, 2]),
+    true_label = true_labels,
+    condition = conditions
+  )
+
+  ggplot(plot_df, aes(x = trial, y = prediction, color = condition)) +
+    geom_point(size = 2.5) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
+    hrfdecode::scale_color_albers() +
+    labs(
+      title = "Trial-level decoder predictions",
+      subtitle = "Weakly supervised decoder correctly separates conditions",
+      x = "Trial number",
+      y = "Soft label prediction",
+      color = "Condition"
+    )
+}
+```
+
+## Next steps {#next-steps}
+
+This tutorial covered the basics of fitting and predicting with `hrfdecode`. For more advanced topics:
+
+- [AR Prewhitening](02-ar-prewhitening.html) — Handle temporal autocorrelation in multi-run data
+- [rMVPA Integration](03-rmvpa-integration.html) — Run searchlight analysis with cross-validation
+- [HRF Estimation](04-hrf-estimation.html) — Understand joint HRF learning and event aggregation
+- [Weakly Supervised Learning](05-weakly-supervised.html) — Deep dive into the ALS algorithm
+
+## Session info {#session-info}
+
+```{r session-info}
+sessioninfo::session_info(pkgs = "hrfdecode")
+```

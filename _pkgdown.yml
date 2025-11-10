@@ -1,0 +1,77 @@
+url: ~
+template:
+  bootstrap: 5
+  bslib:
+    bg: "#ffffff"
+    fg: "#111111"
+    primary: "#1f6feb"
+    secondary: "#6b7280"
+    base_font: "system-ui"
+    heading_font: "system-ui"
+    code_font: "ui-monospace"
+  includes:
+    in_header: |
+      <style>
+      :root {
+        --albers-bg: #fff;
+        --albers-fg: #111;
+        --albers-accent: #1f6feb;
+      }
+      </style>
+
+navbar:
+  structure:
+    left: [intro, reference, articles, tutorials, news]
+    right: [search, github]
+  components:
+    articles:
+      text: Articles
+      menu:
+      - text: Tutorials
+      - text: Getting started
+        href: articles/01-getting-started.html
+      - text: -------
+      - text: How-tos
+      - text: AR prewhitening
+        href: articles/02-ar-prewhitening.html
+      - text: rMVPA integration
+        href: articles/03-rmvpa-integration.html
+      - text: -------
+      - text: Explanations
+      - text: HRF estimation
+        href: articles/04-hrf-estimation.html
+      - text: Weakly supervised learning
+        href: articles/05-weakly-supervised.html
+
+articles:
+- title: Tutorials
+  desc: >
+    Start here for a guided introduction to hrfdecoder. These tutorials walk you
+    through the core workflow step by step.
+  contents:
+  - 01-getting-started
+
+- title: How-tos
+  desc: >
+    Task-oriented recipes for specific use cases. Each guide focuses on solving
+    one particular problem.
+  contents:
+  - 02-ar-prewhitening
+  - 03-rmvpa-integration
+
+- title: Explanations
+  desc: >
+    Conceptual deep dives into how hrfdecoder works. Learn about the algorithms,
+    design decisions, and theoretical foundations.
+  contents:
+  - 04-hrf-estimation
+  - 05-weakly-supervised
+
+home:
+  title: hrfdecode • HRF-Aware Weakly Supervised MVPA Decoder
+  description: >
+    Jointly estimate soft labels, HRF parameters, and multivariate decoders
+    directly from fMRI time series and event models.
+
+development:
+  mode: auto

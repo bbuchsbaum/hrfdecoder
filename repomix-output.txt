@@ -1,0 +1,745 @@
+This file is a merged representation of a subset of the codebase, containing specifically included files, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Only files matching these patterns are included: R/*.R, R/*.r, *.Rmd, *.rmd, DESCRIPTION, tests/*.R, tests/*.r, tests/**/*.R, tests/**/*.r, src/*.cpp, src/*.h, src/*.hpp, src/**/*.cpp, src/**/*.h, src/**/*.hpp
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+<additional_info>
+
+</additional_info>
+
+</file_summary>
+
+<directory_structure>
+R/
+  adapters.R
+  fit.R
+  hrfdecoder_model.R
+  interop_fmri.R
+  math.R
+  predict.R
+  prep.R
+  zzz.R
+src/
+  softlabels_als.cpp
+tests/
+  testthat/
+    test-basic.R
+  testthat.R
+DESCRIPTION
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="R/adapters.R">
+#' @export
+as_mvpa_dataset.fmri_dataset <- function(x, mask = NULL, ...) {
+  mask <- mask %||% x$mask
+  rMVPA::mvpa_dataset(train_data = x$neurovec, mask = mask, ...)
+}
+
+#' Continuous-time MVPA design wrapper
+#' @param event_model fmridesign::event_model
+#' @param block_var run/block ids per TR
+#' @param design_df_events optional trial table (defaults to events(event_model))
+#' @param split_by optional formula passed to mvpa_design
+#' @export
+continuous_mvpa_design <- function(event_model,
+                                   block_var,
+                                   design_df_events = NULL,
+                                   split_by = NULL) {
+  stopifnot(inherits(event_model, "event_model"))
+  block_var <- block_var %||% rep(1, nrow(fmridesign::design_matrix(event_model)))
+  y_dummy <- seq_along(block_var)
+  design_df <- data.frame(y = y_dummy, block = block_var)
+  mvdes <- rMVPA::mvpa_design(
+    train_design = design_df,
+    y_train = ~ y,
+    block_var = ~ block,
+    split_by = split_by
+  )
+  mvdes$event_model <- event_model
+  mvdes$events <- design_df_events %||% fmridesign::events(event_model)
+  mvdes
+}
+</file>
+
+<file path="R/fit.R">
+#' Fit HRF-aware weakly supervised decoder
+#'
+#' @param Y numeric matrix (T x V) of fMRI data (time by voxel)
+#' @param ev_model fmridesign::event_model describing events
+#' @param base_model optional fmridesign::baseline_model for nuisance removal
+#' @param hrf optional fmrihrf basis object
+#' @param lambda_W ridge penalty on decoder weights
+#' @param lambda_HRF adherence weight to HRF prior
+#' @param lambda_smooth temporal smoothness weight
+#' @param theta_penalty ridge penalty on HRF basis coefficients
+#' @param max_iter maximum ALS iterations
+#' @param tol convergence tolerance on P updates
+#' @param nonneg enforce non-negative soft labels
+#' @param background include a background column in the soft labels
+#' @param standardize z-score Y columns before fitting
+#' @param verbose integer verbosity level
+#'
+#' @return object of class `hrfdecoder_fit`
+#' @export
+fit_hrfdecoder <- function(
+  Y,
+  ev_model,
+  base_model = NULL,
+  hrf = NULL,
+  lambda_W = 10,
+  lambda_HRF = 1,
+  lambda_smooth = 5,
+  theta_penalty = 0.01,
+  max_iter = 20,
+  tol = 1e-4,
+  nonneg = TRUE,
+  background = TRUE,
+  standardize = TRUE,
+  verbose = 1
+) {
+  stopifnot(is.matrix(Y))
+  stopifnot(inherits(ev_model, "event_model"))
+  Tn <- nrow(Y)
+
+  if (standardize) {
+    Y <- scale(Y)
+    attr(Y, "scaled:center") <- NULL
+    attr(Y, "scaled:scale") <- NULL
+  }
+  Y <- residualize_baseline(Y, base_model)
+
+  prep <- prepare_decoder_inputs(ev_model, hrf = hrf, background = background)
+  if (nrow(prep$DBbeta) != Tn) {
+    stop("Y rows do not match the event model length.")
+  }
+  L <- build_laplacian_from_runs(prep$run_ids)
+
+  if (verbose) {
+    message("Running alternating solver (", Tn, " TRs, ", ncol(Y), " voxels).")
+  }
+
+  fit_cpp <- fit_softlabels_als(
+    X = Y,
+    P0 = prep$P0,
+    L = L,
+    DBbeta = prep$DBbeta,
+    lambda_W = lambda_W,
+    lambda_HRF = lambda_HRF,
+    lambda_smooth = lambda_smooth,
+    max_iter = max_iter,
+    tol = tol,
+    nonneg = nonneg,
+    threads = FALSE
+  )
+
+  Z <- fit_cpp$P
+  Z_event <- Z[, seq_along(prep$X_list), drop = FALSE]
+  theta <- estimate_hrf_theta(prep$X_list, Z_event, prep$hrf, penalty = theta_penalty)
+  hrf_est <- fmrihrf::hrf_from_coefficients(prep$hrf, theta)
+
+  TR <- sampling_frame_tr(prep$sframe)
+  events_tbl <- fmridesign::events(ev_model)
+
+  fit <- list(
+    W = fit_cpp$W,
+    P = Z,
+    theta = theta,
+    hrf = hrf_est,
+    conditions = prep$conditions,
+    background = background,
+    converged = isTRUE(fit_cpp$converged),
+    iterations = fit_cpp$iterations,
+    settings = list(
+      lambda_W = lambda_W,
+      lambda_HRF = lambda_HRF,
+      lambda_smooth = lambda_smooth,
+      theta_penalty = theta_penalty,
+      max_iter = max_iter,
+      tol = tol,
+      nonneg = nonneg,
+      background = background,
+      TR = TR,
+      run_ids = prep$run_ids
+    ),
+    train = list(
+      P0 = prep$P0,
+      prior = prep$DBbeta,
+      events = events_tbl
+    )
+  )
+  class(fit) <- "hrfdecoder_fit"
+  fit
+}
+</file>
+
+<file path="R/hrfdecoder_model.R">
+#' Create an hrfdecoder model spec for rMVPA
+#' @export
+hrfdecoder_model <- function(dataset, design,
+                             lambda_W = 10,
+                             lambda_HRF = 1,
+                             lambda_smooth = 5,
+                             theta_penalty = 0.01,
+                             basis = NULL,
+                             window = c(4, 8),
+                             nonneg = TRUE,
+                             max_iter = 10,
+                             tol = 1e-4,
+                             performance = NULL,
+                             crossval = NULL,
+                             return_predictions = TRUE,
+                             return_fits = FALSE) {
+  if (is.null(crossval) && !is.null(design$block_var)) {
+    crossval <- rMVPA::blocked_cross_validation(design$block_var)
+  }
+  rMVPA::create_model_spec(
+    "hrfdecoder_model",
+    dataset = dataset,
+    design = design,
+    lambda_W = lambda_W,
+    lambda_HRF = lambda_HRF,
+    lambda_smooth = lambda_smooth,
+    theta_penalty = theta_penalty,
+    basis = basis,
+    window = window,
+    nonneg = nonneg,
+    max_iter = max_iter,
+    tol = tol,
+    crossval = crossval,
+    performance = performance,
+    compute_performance = TRUE,
+    return_predictions = return_predictions,
+    return_fits = return_fits
+  )
+}
+
+#' @export
+y_train.hrfdecoder_model <- function(obj) {
+  n <- nrow(obj$design$train_design)
+  seq_len(n)
+}
+
+#' @export
+train_model.hrfdecoder_model <- function(obj, train_dat, y, sl_info, cv_spec, indices, ...) {
+  X <- as.matrix(train_dat)
+  ev_model <- obj$design$event_model
+  base_model <- obj$design$baseline_model %||% NULL
+  fit <- fit_hrfdecoder(
+    Y = X,
+    ev_model = ev_model,
+    base_model = base_model,
+    hrf = obj$basis,
+    lambda_W = obj$lambda_W,
+    lambda_HRF = obj$lambda_HRF,
+    lambda_smooth = obj$lambda_smooth,
+    theta_penalty = obj$theta_penalty,
+    max_iter = obj$max_iter,
+    tol = obj$tol,
+    nonneg = obj$nonneg,
+    standardize = FALSE,
+    verbose = 0
+  )
+  structure(
+    list(fit = fit, sl_info = sl_info, indices = indices),
+    class = "hrfdecoder_fit_wrap"
+  )
+}
+
+#' @export
+format_result.hrfdecoder_model <- function(obj, result, error_message = NULL, context, ...) {
+  if (!is.null(error_message)) {
+    return(tibble::tibble(
+      class = list(NULL),
+      probs = list(NULL),
+      y_true = list(NULL),
+      test_ind = list(context$test_ind %||% NA_integer_),
+      fit = list(NULL),
+      error = TRUE,
+      error_message = error_message
+    ))
+  }
+  Xtest <- as.matrix(context$test)
+  preds <- predict_hrfdecoder(
+    object = result$fit,
+    Y_test = Xtest,
+    ev_model_test = obj$design$event_model,
+    mode = "trial",
+    window = obj$window
+  )
+  probs <- preds$probs
+  classes <- factor(colnames(probs)[max.col(probs)], levels = colnames(probs))
+  tibble::tibble(
+    class = list(classes),
+    probs = list(probs),
+    y_true = list(preds$y_true),
+    test_ind = list(context$test_ind %||% seq_len(nrow(Xtest))),
+    fit = list(if (isTRUE(obj$return_fits)) result$fit else NULL),
+    error = FALSE,
+    error_message = NA_character_
+  )
+}
+
+#' @export
+merge_results.hrfdecoder_model <- function(obj, result_set, indices, id, ...) {
+  if (any(result_set$error)) {
+    emsg <- result_set$error_message[which(result_set$error)[1]]
+    return(tibble::tibble(
+      result = list(NULL),
+      indices = list(indices),
+      performance = list(NULL),
+      id = id,
+      error = TRUE,
+      error_message = emsg
+    ))
+  }
+  combined <- wrap_classification_result_from_folds(result_set)
+  perf <- compute_acc_perf(combined)
+  tibble::tibble(
+    result = list(combined),
+    indices = list(indices),
+    performance = list(perf),
+    id = id,
+    error = FALSE,
+    error_message = NA_character_
+  )
+}
+
+#' @keywords internal
+wrap_classification_result_from_folds <- function(result_set) {
+  probs <- do.call(rbind, result_set$probs)
+  y_true <- do.call(c, lapply(result_set$y_true, as.character))
+  y_true <- factor(y_true, levels = colnames(probs))
+  classes <- factor(colnames(probs)[max.col(probs)], levels = colnames(probs))
+  list(class = classes, probs = probs, y_true = y_true)
+}
+
+#' @keywords internal
+compute_acc_perf <- function(result) {
+  acc <- mean(result$class == result$y_true)
+  tibble::tibble(metric = "accuracy", value = acc)
+}
+</file>
+
+<file path="R/interop_fmri.R">
+#' @keywords internal
+`%||%` <- function(x, y) if (!is.null(x)) x else y
+
+#' @keywords internal
+.get_sframe <- function(ev_model) {
+  stopifnot(inherits(ev_model, "event_model"))
+  sf <- attr(ev_model, "sampling_frame", exact = TRUE)
+  if (!is.null(sf)) return(sf)
+  blocklens <- attr(ev_model, "blocklens", exact = TRUE)
+  if (is.null(blocklens)) {
+    dm <- fmridesign::design_matrix(ev_model)
+    blocklens <- nrow(dm)
+  }
+  tr_attr <- attr(ev_model, "TR", exact = TRUE)
+  if (!is.null(tr_attr)) {
+    return(fmrihrf::sampling_frame(blocklens = blocklens, TR = tr_attr))
+  }
+  sam <- fmrihrf::samples(attr(ev_model, "sampling_frame", exact = TRUE))
+  tr <- if (length(sam) > 1) stats::median(diff(sam)) else 2
+  fmrihrf::sampling_frame(blocklens = blocklens, TR = tr)
+}
+
+#' Build per-condition basis matrices for decoding
+#' @param ev_model fmridesign::event_model result
+#' @param hrf optional fmrihrf HRF object
+#' @keywords internal
+build_condition_basis <- function(ev_model, hrf = NULL) {
+  stopifnot(inherits(ev_model, "event_model"))
+  sframe <- attr(ev_model, "sampling_frame", exact = TRUE)
+  if (is.null(sframe)) sframe <- .get_sframe(ev_model)
+  if (is.null(hrf)) {
+    hrf <- fmrihrf::getHRF("spmg1")
+  }
+  terms <- fmridesign::event_terms(ev_model)
+  if (length(terms) != 1L) {
+    warning("Multiple event terms detected; using the first term for decoding.")
+  }
+  term <- terms[[1L]]
+  X_list <- fmridesign::condition_basis_list(term, hrf, sframe, output = "condition_list")
+  conds <- names(X_list)
+  list(X_list = X_list, hrf = hrf, sframe = sframe, conditions = conds)
+}
+
+#' Residualize Y against a baseline model
+#' @param Y numeric matrix (T x V)
+#' @param base_model optional fmridesign::baseline_model
+#' @keywords internal
+residualize_baseline <- function(Y, base_model = NULL) {
+  if (is.null(base_model)) return(Y)
+  fmridesign::residualize(base_model, Y)
+}
+</file>
+
+<file path="R/math.R">
+#' @keywords internal
+row_softmax <- function(X) {
+  X <- as.matrix(X)
+  if (nrow(X) == 0L) return(X)
+  max_per_row <- apply(X, 1, max)
+  exps <- exp(X - max_per_row)
+  denom <- rowSums(exps)
+  exps / denom
+}
+</file>
+
+<file path="R/predict.R">
+#' Predict with an hrfdecoder fit
+#'
+#' @param object hrfdecoder_fit
+#' @param Y_test numeric matrix (T x V)
+#' @param ev_model_test optional fmridesign::event_model for trial-level outputs
+#' @param mode "tr" or "trial"
+#' @param window time window (seconds) relative to onset for aggregation
+#' @param weights weighting scheme ("hrf" uses fitted HRF; "flat" uniform)
+#'
+#' @export
+predict_hrfdecoder <- function(object, Y_test,
+                               ev_model_test = NULL,
+                               mode = c("tr", "trial"),
+                               window = c(4, 8),
+                               weights = c("hrf", "flat")) {
+  stopifnot(inherits(object, "hrfdecoder_fit"))
+  stopifnot(is.matrix(Y_test))
+  mode <- match.arg(mode)
+  weights <- match.arg(weights)
+
+  scores <- predict_softlabels(Y_test, object$W)
+  if (mode == "tr") {
+    colnames(scores) <- c(object$conditions, if (isTRUE(object$background)) "background")
+    return(scores)
+  }
+  stopifnot(inherits(ev_model_test, "event_model"))
+  events_tbl <- fmridesign::events(ev_model_test)
+  P_event <- scores[, seq_along(object$conditions), drop = FALSE]
+  hrf_weights <- if (weights == "hrf") object$hrf else NULL
+  agg <- aggregate_events(
+    P = P_event,
+    events = events_tbl,
+    TR = object$settings$TR,
+    conditions = object$conditions,
+    window = window,
+    hrf = hrf_weights
+  )
+  agg
+}
+
+#' Aggregate TR-level soft labels to events
+#' @param P matrix (T x K_event)
+#' @param events event data.frame (needs columns onset, condition)
+#' @param TR TR duration (seconds)
+#' @param conditions ordered condition labels
+#' @param window time window (s) after onset
+#' @param hrf optional fmrihrf HRF object for weighting
+#' @return list with probs matrix and y_true factor
+#' @export
+aggregate_events <- function(P, events, TR, conditions,
+                             window = c(4, 8), hrf = NULL) {
+  stopifnot(is.matrix(P))
+  stopifnot(all(c("onset", "condition") %in% names(events)))
+  K <- length(conditions)
+  if (ncol(P) != K) {
+    stop("Number of columns in P must match conditions.")
+  }
+  window <- sort(window)
+  tgrid <- seq(window[1], window[2], by = TR)
+  if (length(tgrid) == 0L) tgrid <- window[2]
+  weights <- if (is.null(hrf)) rep(1, length(tgrid)) else as.numeric(fmrihrf::evaluate(hrf, tgrid))
+  weights <- weights / sum(weights)
+  NE <- nrow(events)
+  probs <- matrix(0, nrow = NE, ncol = K)
+  colnames(probs) <- conditions
+
+  for (i in seq_len(NE)) {
+    onset <- events$onset[i]
+    start_idx <- floor((onset + window[1]) / TR) + 1L
+    idx <- start_idx + seq_along(weights) - 1L
+    idx <- idx[idx >= 1L & idx <= nrow(P)]
+    if (length(idx) == 0L) next
+    w <- weights[seq_along(idx)]
+    slice <- P[idx, , drop = FALSE]
+    probs[i, ] <- colSums(slice * w)
+  }
+  y_true <- factor(events$condition, levels = conditions)
+  list(probs = probs, y_true = y_true)
+}
+</file>
+
+<file path="R/prep.R">
+#' @keywords internal
+build_laplacian_from_runs <- function(run_ids) {
+  stopifnot(length(run_ids) >= 1L)
+  blocks <- split(seq_along(run_ids), run_ids)
+  mats <- lapply(blocks, function(idx) {
+    n <- length(idx)
+    if (n <= 2L) {
+      return(Matrix::Diagonal(n))
+    }
+    rows <- rep(seq_len(n - 2L), each = 3L)
+    cols <- c(rows, rows + 1L, rows + 2L)
+    vals <- c(rep(1, n - 2L), rep(-2, n - 2L), rep(1, n - 2L))
+    D <- Matrix::sparseMatrix(i = rows, j = cols, x = vals, dims = c(n - 2L, n))
+    Matrix::crossprod(D)
+  })
+  Matrix::bdiag(mats)
+}
+
+#' @keywords internal
+build_softlabel_prior <- function(X_list, theta, background = TRUE) {
+  stopifnot(length(X_list) >= 1L)
+  Tn <- nrow(X_list[[1L]])
+  G <- vapply(X_list, function(Xc) as.numeric(Xc %*% theta), numeric(Tn))
+  if (background) {
+    G <- cbind(G, rep(0, Tn))
+  }
+  list(DBbeta = G, P0 = row_softmax(G))
+}
+
+#' Prepare decoder design inputs
+#' @keywords internal
+prepare_decoder_inputs <- function(ev_model, hrf = NULL, background = TRUE) {
+  interop <- build_condition_basis(ev_model, hrf)
+  Pdim <- ncol(interop$X_list[[1L]])
+  theta0 <- numeric(Pdim)
+  theta0[1L] <- 1
+  priors <- build_softlabel_prior(interop$X_list, theta0, background = background)
+  blocklens <- interop$sframe$blocklens %||% nrow(interop$X_list[[1L]])
+  run_ids <- rep(seq_along(blocklens), blocklens)
+  list(
+    X_list = interop$X_list,
+    hrf = interop$hrf,
+    sframe = interop$sframe,
+    conditions = interop$conditions,
+    DBbeta = priors$DBbeta,
+    P0 = priors$P0,
+    theta = theta0,
+    run_ids = run_ids
+  )
+}
+
+#' Estimate HRF basis coefficients from soft labels
+#' @keywords internal
+estimate_hrf_theta <- function(X_list, Z_event, hrf_obj, penalty = 0.01) {
+  P <- ncol(X_list[[1L]])
+  XtX <- matrix(0, P, P)
+  Xtz <- numeric(P)
+  for (j in seq_along(X_list)) {
+    Xc <- X_list[[j]]
+    XtX <- XtX + crossprod(Xc)
+    Xtz <- Xtz + as.numeric(crossprod(Xc, Z_event[, j]))
+  }
+  Rmat <- fmrihrf::penalty_matrix(hrf_obj)
+  theta <- solve(XtX + penalty * Rmat, Xtz)
+  theta
+}
+
+#' @keywords internal
+sampling_frame_tr <- function(sframe) {
+  tr <- sframe$TR %||% attr(sframe, "TR", exact = TRUE)
+  if (!is.null(tr)) return(tr)
+  sam <- fmrihrf::samples(sframe)
+  if (length(sam) > 1L) stats::median(diff(sam)) else 2
+}
+</file>
+
+<file path="R/zzz.R">
+#' @useDynLib hrfdecode, .registration = TRUE
+#' @importFrom Rcpp sourceCpp
+NULL
+</file>
+
+<file path="src/softlabels_als.cpp">
+#include <RcppArmadillo.h>
+
+using arma::mat;
+using arma::sp_mat;
+using arma::vec;
+using arma::speye;
+using arma::norm;
+
+static inline void project_nonneg(vec &v) {
+  for (arma::uword i = 0; i < v.n_elem; ++i) {
+    if (v[i] < 0.0) v[i] = 0.0;
+  }
+}
+
+Rcpp::List fit_softlabels_als_cpp(const mat &X,
+                                  const mat &P0,
+                                  const sp_mat &L,
+                                  const mat &DBbeta,
+                                  double lambda_W,
+                                  double lambda_HRF,
+                                  double lambda_smooth,
+                                  int max_iter,
+                                  double tol,
+                                  bool nonneg,
+                                  bool threads) {
+  (void)threads;
+  const int T = X.n_rows;
+  const int V = X.n_cols;
+  const int K = P0.n_cols;
+  if (P0.n_rows != T || DBbeta.n_rows != T || DBbeta.n_cols != K) {
+    Rcpp::stop("Dimension mismatch between inputs.");
+  }
+  mat P = P0;
+  mat XtX = X.t() * X;
+  mat Aw = XtX + lambda_W * arma::eye<mat>(V, V);
+  sp_mat lap_op = (1.0 + lambda_HRF) * speye<sp_mat>(T, T) + lambda_smooth * L;
+  mat W(V, K, arma::fill::zeros);
+  mat XW(T, K, arma::fill::zeros);
+
+  double prev_norm = arma::norm(P, "fro");
+  double rel_change = tol + 1.0;
+  int iter = 0;
+
+  for (iter = 0; iter < max_iter; ++iter) {
+    // W update (ridge multiresponse)
+    mat rhs = X.t() * P;
+    W = arma::solve(Aw, rhs, arma::solve_opts::likely_sympd);
+    XW = X * W;
+
+    // P update per class
+    mat P_prev = P;
+    for (int k = 0; k < K; ++k) {
+      vec rhs_p = XW.col(k) + lambda_HRF * DBbeta.col(k);
+      vec pk;
+      bool ok = arma::spsolve(pk, lap_op, rhs_p, "lapack");
+      if (!ok) {
+        Rcpp::stop("Failed to solve smoothing system for class %d", k + 1);
+      }
+      if (nonneg) {
+        project_nonneg(pk);
+      }
+      P.col(k) = pk;
+    }
+    double diff = arma::norm(P - P_prev, "fro");
+    double denom = std::max(1e-12, prev_norm);
+    rel_change = diff / denom;
+    prev_norm = arma::norm(P, "fro");
+    if (rel_change < tol) {
+      break;
+    }
+  }
+  return Rcpp::List::create(
+    Rcpp::Named("W") = W,
+    Rcpp::Named("P") = P,
+    Rcpp::Named("iterations") = iter + 1,
+    Rcpp::Named("converged") = rel_change < tol
+  );
+}
+
+arma::mat predict_softlabels_cpp(const mat &Xtest, const mat &W) {
+  if (Xtest.n_cols != W.n_rows) {
+    Rcpp::stop("Dimension mismatch between Xtest and W.");
+  }
+  return Xtest * W;
+}
+</file>
+
+<file path="tests/testthat/test-basic.R">
+test_that("fit_hrfdecoder runs on synthetic data", {
+  skip_if_not_installed("fmridesign")
+  skip_if_not_installed("fmrihrf")
+  sframe <- fmrihrf::sampling_frame(blocklens = 60, TR = 1)
+  evtab <- data.frame(
+    onset = c(5, 15, 35),
+    condition = factor(c("A", "B", "A")),
+    run = c(1, 1, 1)
+  )
+  evmod <- fmridesign::event_model(
+    onset ~ fmridesign::hrf(condition, basis = "spmg1"),
+    data = evtab,
+    block = ~run,
+    sampling_frame = sframe
+  )
+  Y <- matrix(rnorm(60 * 20), 60, 20)
+  fit <- fit_hrfdecoder(
+    Y = Y,
+    ev_model = evmod,
+    lambda_W = 1,
+    lambda_HRF = 0.5,
+    lambda_smooth = 0.1,
+    max_iter = 5,
+    verbose = 0
+  )
+  expect_equal(nrow(fit$P), 60)
+  preds <- predict_hrfdecoder(fit, Y, ev_model_test = evmod, mode = "trial")
+  expect_equal(ncol(preds$probs), length(fit$conditions))
+})
+</file>
+
+<file path="tests/testthat.R">
+library(testthat)
+library(hrfdecode)
+
+test_check("hrfdecode")
+</file>
+
+<file path="DESCRIPTION">
+Package: hrfdecode
+Type: Package
+Title: HRF-Aware Weakly Supervised MVPA Decoder for fMRI
+Version: 0.2.0
+Authors@R: person("Your", "Name", email = "you@example.com", role = c("aut","cre"))
+Description: Jointly estimate soft labels, HRF (in an fmrihrf basis), and a multivariate decoder directly from fMRI time series and fmridesign event/baseline models.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+LinkingTo: Rcpp, RcppArmadillo
+Imports: 
+    Rcpp,
+    RcppArmadillo,
+    Matrix,
+    stats,
+    fmridesign (>= 0.1.0),
+    fmrihrf (>= 0.1.0),
+    rMVPA,
+    tibble
+Remotes: bbuchsbaum/fmridesign, bbuchsbaum/fmrihrf
+SystemRequirements: C++17
+Suggests:
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+</file>
+
+</files>

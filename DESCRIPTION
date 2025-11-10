@@ -1,0 +1,32 @@
+Package: hrfdecode
+Type: Package
+Title: HRF-Aware Weakly Supervised MVPA Decoder for fMRI
+Version: 0.2.0
+Authors@R: person("Your", "Name", email = "you@example.com", role = c("aut","cre"))
+Description: Jointly estimate soft labels, HRF (in an fmrihrf basis), and a multivariate decoder directly from fMRI time series and fmridesign event/baseline models.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+LinkingTo: Rcpp, RcppArmadillo
+Imports:
+    Rcpp,
+    RcppArmadillo,
+    Matrix,
+    stats,
+    fmridesign (>= 0.1.0),
+    fmrihrf (>= 0.1.0),
+    fmriAR (>= 0.1.0),
+    rMVPA,
+    tibble
+Remotes: bbuchsbaum/fmridesign, bbuchsbaum/fmrihrf, bbuchsbaum/fmriAR
+SystemRequirements: C++17
+Suggests:
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown,
+    ggplot2,
+    viridisLite,
+    sessioninfo
+Config/testthat/edition: 3
+VignetteBuilder: knitr
+RoxygenNote: 7.3.3

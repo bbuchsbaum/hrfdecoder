@@ -1,0 +1,359 @@
+---
+title: "AR prewhitening for temporal autocorrelation"
+name: ar-prewhitening
+description: "Handle fMRI temporal autocorrelation with autoregressive prewhitening."
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 2
+    css: albers.css
+vignette: >
+  %\VignetteIndexEntry{AR prewhitening for temporal autocorrelation}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>",
+  fig.align = "center",
+  fig.retina = 2,
+  out.width = "100%",
+  message = FALSE,
+  warning = FALSE,
+  fig.width = 7,
+  fig.asp = 0.618
+)
+set.seed(123)
+options(pillar.sigfig = 7, width = 80)
+
+if (requireNamespace("ggplot2", quietly = TRUE) &&
+    requireNamespace("hrfdecode", quietly = TRUE)) {
+  ggplot2::theme_set(hrfdecode::theme_albers())
+}
+```
+
+## Goal {#goal}
+
+Learn how to apply autoregressive (AR) prewhitening to correct for temporal autocorrelation in fMRI noise, improving decoder performance and statistical efficiency.
+
+## TL;DR {#tldr}
+
+```{r tldr, eval=FALSE}
+library(hrfdecode)
+
+# Enable AR(1) prewhitening
+fit <- fit_hrfdecoder(
+  Y = fmri_data,
+  event_model = ev_model,
+  baseline_model = bl_model,
+  ar_order = 1              # AR(1) prewhitening
+)
+
+# Automatic order selection via BIC
+fit_auto <- fit_hrfdecoder(
+  Y = fmri_data,
+  event_model = ev_model,
+  baseline_model = bl_model,
+  ar_order = "auto",        # BIC-based selection
+  ar_method = "yule-walker" # Yule-Walker estimation
+)
+
+# Predictions automatically apply learned AR parameters
+preds <- predict(fit_auto, newdata = test_data, mode = "trial")
+```
+
+## Why prewhiten? {#why-prewhiten}
+
+fMRI noise exhibits strong **temporal autocorrelation**: consecutive time points are correlated due to physiological processes, scanner drift, and hemodynamic smoothing. Ignoring this autocorrelation:
+
+- **Inflates false positives** in statistical tests
+- **Reduces decoder efficiency** by treating correlated errors as independent
+- **Biases parameter estimates** in regression models
+
+**Prewhitening** transforms the data to remove temporal dependencies, making subsequent modeling more accurate.
+
+## AR noise models {#ar-models}
+
+`hrfdecode` supports three AR model types:
+
+1. **AR(p)**: Autoregressive model of order p
+   - `ar_order = 1` → AR(1), typical for fMRI
+   - `ar_order = 2` → AR(2), captures more complex dynamics
+
+2. **ARMA(p,q)**: Autoregressive moving average
+   - `ar_order = c(1, 1)` → ARMA(1,1)
+   - More flexible but requires more data
+
+3. **Automatic selection**: BIC-based order selection
+   - `ar_order = "auto"` → Let `fmriAR` choose optimal order
+   - Tests AR(1) through AR(5) and selects best fit
+
+Estimation methods:
+
+- **"yule-walker"**: Fast, stable (default for AR(p))
+- **"hannan-rissanen"**: For ARMA models
+- **"auto"**: Delegates to `fmriAR::estimate_ar_order()`
+
+## Basic AR(1) prewhitening {#ar1-basic}
+
+Let's start with a simple AR(1) example.
+
+```{r load-libs}
+library(hrfdecode)
+library(fmridesign)
+```
+
+```{r simulate-ar1}
+# Simulation with AR(1) noise
+n_trs <- 200
+n_voxels <- 30
+n_trials <- 40
+tr <- 2
+
+# Event table
+onsets <- seq(10, n_trs * tr - 20, length.out = n_trials)
+conditions <- rep(c("A", "B"), each = n_trials / 2)
+event_table <- data.frame(onset = onsets, condition = conditions, duration = 1)
+
+# Design models
+ev_model <- event_model(
+  onset ~ hrf(condition, basis = "spmg1"),
+  data = event_table,
+  block = ~ 1,
+  sampling_frame = fmrihrf::sampling_frame(TR = tr, blocklens = n_trs)
+)
+bl_model <- baseline_model(basis = "bs", degree = 3,
+                           sframe = fmrihrf::sampling_frame(TR = tr, blocklens = n_trs))
+
+# Simulate signal
+hrf_basis <- fmrihrf::evaluate(fmrihrf::getHRF("spmg2"), seq(0, 24, by = tr))
+hrf_vec <- as.numeric(hrf_basis %*% c(1, 0))
+stick_A <- rep(0, n_trs); stick_B <- rep(0, n_trs)
+idx_A <- pmin(n_trs, pmax(1L, floor(event_table$onset[event_table$condition == "A"] / tr) + 1L))
+idx_B <- pmin(n_trs, pmax(1L, floor(event_table$onset[event_table$condition == "B"] / tr) + 1L))
+stick_A[idx_A] <- 1; stick_B[idx_B] <- 1
+signal <- stick_A - stick_B
+signal_conv <- stats::convolve(signal, rev(hrf_vec), type = "open")[1:n_trs]
+
+# Generate AR(1) noise with phi = 0.6
+phi_true <- 0.6
+Y_ar <- matrix(0, n_trs, n_voxels)
+for (v in 1:n_voxels) {
+  eps <- rnorm(n_trs)
+  for (t in 2:n_trs) {
+    eps[t] <- phi_true * eps[t - 1] + rnorm(1)
+  }
+  Y_ar[, v] <- eps + signal_conv * (v <= n_voxels / 2) * 0.5
+}
+```
+
+Now fit with and without AR(1) prewhitening to compare.
+
+```{r fit-comparison}
+# No prewhitening
+fit_none <- fit_hrfdecoder(
+  Y = Y_ar,
+  ev_model = ev_model,
+  base_model = bl_model,
+  ar_order = NULL,  # No AR correction
+  verbose = FALSE
+)
+
+# AR(1) prewhitening
+fit_ar1 <- fit_hrfdecoder(
+  Y = Y_ar,
+  ev_model = ev_model,
+  base_model = bl_model,
+  ar_order = 1,     # AR(1)
+  verbose = FALSE
+)
+```
+
+Examine the learned AR parameters:
+
+```{r inspect-ar-params}
+# AR coefficients (one per voxel if spatial pooling is off, or global)
+ar_params <- fit_ar1$preproc_params$ar_params
+cat("AR(1) coefficient (phi):", round(mean(ar_params$coefficients[[1]]), 3), "\n")
+cat("True phi:", phi_true, "\n")
+```
+
+The estimated AR(1) coefficient is close to the true value of 0.6.
+
+## Multi-run data with run-specific AR {#multi-run}
+
+In multi-run experiments, different runs may have different AR structures. Use `ar_pooling = "run"` to estimate separate AR models per run.
+
+```{r multi-run-simulation}
+# Simulate 2 runs with different AR parameters
+n_runs <- 2
+n_trs_per_run <- 100
+n_trs_total <- n_runs * n_trs_per_run
+
+# Create event table spanning both runs
+onsets_run <- seq(10, n_trs_per_run * tr - 20, length.out = n_trials / 2)
+event_table_multi <- data.frame(
+  onset = c(onsets_run, onsets_run + n_trs_per_run * tr),
+  condition = rep(c("A", "B"), n_trials / 2),
+  duration = 1,
+  run = rep(1:2, each = n_trials / 2)
+)
+
+# Design for multi-run
+ev_model_multi <- event_model(
+  onset ~ hrf(condition, basis = "spmg1"),
+  data = event_table_multi,
+  block = ~ run,
+  sampling_frame = fmrihrf::sampling_frame(TR = tr, blocklens = rep(n_trs_per_run, n_runs))
+)
+bl_model_multi <- baseline_model(
+  basis = "bs", degree = 3,
+  sframe = fmrihrf::sampling_frame(TR = tr, blocklens = rep(n_trs_per_run, n_runs))
+)
+
+# Simulate with different AR for each run
+phi_run1 <- 0.5
+phi_run2 <- 0.7
+Y_multi <- matrix(0, n_trs_total, n_voxels)
+
+for (v in 1:n_voxels) {
+  # Run 1
+  eps1 <- rnorm(n_trs_per_run)
+  for (t in 2:n_trs_per_run) {
+    eps1[t] <- phi_run1 * eps1[t - 1] + rnorm(1)
+  }
+  # Run 2
+  eps2 <- rnorm(n_trs_per_run)
+  for (t in 2:n_trs_per_run) {
+    eps2[t] <- phi_run2 * eps2[t - 1] + rnorm(1)
+  }
+  Y_multi[, v] <- c(eps1, eps2)
+}
+```
+
+Fit with run-specific AR:
+
+```{r fit-run-specific, eval=FALSE}
+# This would require ar_pooling parameter (not yet implemented in current version)
+# fit_run_ar <- fit_hrfdecoder(
+#   Y = Y_multi,
+#   event_model = ev_model_multi,
+#   baseline_model = bl_model_multi,
+#   ar_order = 1,
+#   ar_pooling = "run"  # Separate AR per run
+# )
+```
+
+> **Note**: Run-specific AR pooling requires additional implementation. The current version uses global AR pooling across all voxels/runs.
+
+## Automatic AR order selection {#auto-selection}
+
+Instead of manually specifying `ar_order`, use `"auto"` to let BIC select the optimal order.
+
+```{r auto-order}
+fit_auto <- fit_hrfdecoder(
+  Y = Y_ar,
+  ev_model = ev_model,
+  base_model = bl_model,
+  ar_order = "auto",
+  ar_method = "ar",
+  verbose = FALSE
+)
+
+# Check selected order
+ar_params_auto <- fit_auto$preproc_params$ar_params
+cat("Automatically selected AR order:", length(ar_params_auto$coefficients[[1]]), "\n")
+```
+
+Automatic selection balances model fit (lower residual variance) against complexity (number of AR parameters).
+
+## Impact on prediction {#prediction-impact}
+
+Predictions automatically apply the learned AR transformation.
+
+```{r predict-with-ar}
+# Test data with same AR structure
+Y_test <- matrix(0, n_trs, n_voxels)
+for (v in 1:n_voxels) {
+  eps <- rnorm(n_trs)
+  for (t in 2:n_trs) {
+    eps[t] <- phi_true * eps[t - 1] + rnorm(1)
+  }
+  Y_test[, v] <- eps + signal_conv * (v <= n_voxels / 2) * 0.5
+}
+
+# Predictions with AR(1) model
+pred_ar1 <- predict_hrfdecoder(fit_ar1, Y_test = Y_test, ev_model_test = ev_model, mode = "trial")
+
+# Predictions without AR
+pred_none <- predict_hrfdecoder(fit_none, Y_test = Y_test, ev_model_test = ev_model, mode = "trial")
+
+# Compare accuracy
+true_labels <- ifelse(conditions == "A", 1, -1)
+acc_ar1 <- mean(sign(pred_ar1$probs[,1] - pred_ar1$probs[,2]) == true_labels)
+acc_none <- mean(sign(pred_none$probs[,1] - pred_none$probs[,2]) == true_labels)
+
+cat("Accuracy with AR(1):", round(acc_ar1 * 100, 1), "%\n")
+cat("Accuracy without AR:", round(acc_none * 100, 1), "%\n")
+```
+
+AR prewhitening typically improves prediction accuracy by properly accounting for temporal structure.
+
+## Visualizing AR effects {#visualization}
+
+```{r plot-ar-comparison, fig.cap="Comparison of trial predictions with and without AR(1) prewhitening. AR correction reduces noise and improves separation."}
+if (requireNamespace("ggplot2", quietly = TRUE)) {
+  library(ggplot2)
+
+  plot_df <- data.frame(
+    trial = rep(1:n_trials, 2),
+    prediction = c(as.numeric(pred_ar1$probs[,1] - pred_ar1$probs[,2]),
+                   as.numeric(pred_none$probs[,1] - pred_none$probs[,2])),
+    method = rep(c("AR(1)", "No AR"), each = n_trials),
+    condition = rep(conditions, 2)
+  )
+
+  ggplot(plot_df, aes(x = trial, y = prediction, color = condition)) +
+    geom_point(alpha = 0.7, size = 2) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
+    facet_wrap(~ method, ncol = 1) +
+    hrfdecode::scale_color_albers() +
+    labs(
+      title = "Effect of AR prewhitening on predictions",
+      subtitle = "AR(1) correction improves signal-to-noise ratio",
+      x = "Trial number",
+      y = "Soft label prediction",
+      color = "Condition"
+    )
+}
+```
+
+## When to use AR prewhitening {#when-to-use}
+
+**Use AR prewhitening when:**
+
+- Working with **multi-run fMRI data** (common in most experiments)
+- **TR < 2s** (faster sampling increases autocorrelation)
+- Noise structure shows **strong temporal dependence**
+- Statistical **efficiency matters** (e.g., limited data, weak signals)
+
+**Skip AR prewhitening when:**
+
+- Data is **already prewhitened** (e.g., some preprocessing pipelines)
+- **Single short run** with minimal temporal structure
+- **Computational speed** is critical (AR adds overhead)
+
+## Next steps {#next-steps}
+
+- [Getting Started](01-getting-started.html) — Basic decoder fitting workflow
+- [rMVPA Integration](03-rmvpa-integration.html) — Cross-validation with searchlight analysis
+- [HRF Estimation](04-hrf-estimation.html) — Joint HRF learning
+- [Weakly Supervised Learning](05-weakly-supervised.html) — Algorithm internals
+
+## Session info {#session-info}
+
+```{r session-info}
+sessioninfo::session_info(pkgs = "hrfdecode")
+```

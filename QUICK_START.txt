@@ -1,0 +1,179 @@
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                 rMVPA + hrfdecoder INTEGRATION GUIDE                        │
+│                      Quick Start Reference Card                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+DOCUMENT READING ORDER:
+═════════════════════════════════════════════════════════════════════════════
+
+  1. README_RMVPA_INTEGRATION.md
+     ├─ Overview & document index
+     ├─ Quick architectural summary
+     ├─ Integration checklist for AR prewhitening
+     └─ Q&A section
+     Time: 5-10 minutes
+
+  2. RMVPA_KEY_FINDINGS.md
+     ├─ File reference with line numbers
+     ├─ Critical integration points
+     ├─ Data structure flows
+     └─ Implementation checklist
+     Time: 10 minutes (reference while coding)
+
+  3. rMVPA_ARCHITECTURE_REPORT.md
+     ├─ Complete 9-section analysis
+     ├─ Data flow diagrams with timing
+     ├─ Preprocessing patterns explained
+     ├─ Recommended code examples
+     └─ Architecture validation checklist
+     Time: 30-45 minutes (for deep understanding)
+
+WHERE TO IMPLEMENT AR PREWHITENING:
+═════════════════════════════════════════════════════════════════════════════
+
+Location 1: train_model.hrfdecoder_model()
+  File:    /Users/bbuchsbaum/code/rMVPA/R/hrfdecoder_model.R
+  Lines:   175-210
+  Action:  Estimate AR, apply to training data, store params
+  Why:     Fit decoder on clean, whitened training data
+
+Location 2: format_result.hrfdecoder_model()
+  File:    /Users/bbuchsbaum/code/rMVPA/R/hrfdecoder_model.R
+  Lines:   216-297 (line 237-243 specifically)
+  Action:  Apply same AR params to test data before predict
+  Why:     Test data must use training fold's AR parameters
+
+CRITICAL CONSTRAINTS:
+═════════════════════════════════════════════════════════════════════════════
+
+✓ AR estimated from TRAINING DATA ONLY (before line 196 in train_model)
+✓ Same AR params applied to TEST DATA (before line 239 in format_result)
+✓ No re-estimation per fold
+✓ Params stored in fit object (structure list with ar_params field)
+✓ No data leakage across folds
+
+EXPECTED CHANGES:
+═════════════════════════════════════════════════════════════════════════════
+
+1. Add parameter to hrfdecoder_model() function
+   ar_order = 2   # or NULL/0 for no whitening
+
+2. Modify train_model.hrfdecoder_model()
+   ├─ Check if ar_order > 0
+   ├─ Call: ar_fit <- fit_ar_model(X, ar_order)
+   ├─ Call: X_pw <- apply_whitening(X, ar_fit)
+   ├─ Pass X_pw to hrfdecoder::hrfdecoder_fit()
+   └─ Return structure with ar_params field
+
+3. Modify format_result.hrfdecoder_model()
+   ├─ Check if result$ar_params exists
+   ├─ Call: Xtest_pw <- apply_whitening(Xtest, result$ar_params)
+   ├─ Use Xtest_pw for prediction
+   └─ Continue with event aggregation
+
+KEY CODE REFERENCES:
+═════════════════════════════════════════════════════════════════════════════
+
+S3 Method Dispatch:
+  /R/allgeneric.R:351-708
+  Generic: train_model(obj, ...)
+  Methods will be called automatically
+
+Model Spec Creation:
+  /R/mvpa_model.R:196-213
+  create_model_spec("hrfdecoder_model", ...)
+
+CV Loop (where train_model is called):
+  /R/mvpa_iterate.R:274-279
+  Line 274-279: Internal fold iteration with train_model call
+
+Cross-Validation Specification:
+  /R/crossval.R:402-406
+  blocked_cross_validation() - used for run-level folds
+
+Data Structure Access:
+  obj$design$event_model   # fmridesign object
+  obj$design$events        # event table with onset, condition
+  obj$lambda_W, obj$lambda_HRF, etc.  # other parameters
+
+TESTING STRATEGY:
+═════════════════════════════════════════════════════════════════════════════
+
+□ Unit test: AR estimation produces expected shape
+□ Unit test: Whitening parameters recoverable
+□ Integration test: train_model returns ar_params
+□ Integration test: format_result applies params correctly
+□ CV test: train/test independence (no data leakage)
+□ E2E test: searchlight with AR produces valid metrics
+□ Comparison: Results with/without AR should differ meaningfully
+
+PERFORMANCE TIPS:
+═════════════════════════════════════════════════════════════════════════════
+
+• Estimate AR once per ROI before folds (if possible) → faster
+• Vectorize per-voxel AR estimation (use matrix operations)
+• Cache AR fits if stable across folds
+• Store ar_params compactly (coefficients matrix only)
+
+ARCHITECTURE PATTERNS USED:
+═════════════════════════════════════════════════════════════════════════════
+
+1. S3 Method Dispatch
+   train_model(hrfdecoder_model, data, ...)
+   → dispatch to train_model.hrfdecoder_model()
+
+2. Model Spec Pattern
+   model_spec = list(dataset, design, parameters, ...)
+   class(model_spec) = "hrfdecoder_model"
+   → passed through entire pipeline
+
+3. Context Passing
+   train_dat, y, sl_info, cv_spec, indices
+   → all available in train_model signature
+
+4. Fit Object Wrapper
+   structure(list(fit=..., ar_params=...), class="hrfdecoder_fit_wrap")
+   → returned to format_result and merge_results
+
+QUICK CHECKLIST:
+═════════════════════════════════════════════════════════════════════════════
+
+Before implementation:
+  □ Read README_RMVPA_INTEGRATION.md
+  □ Read Section 5.1 in rMVPA_ARCHITECTURE_REPORT.md
+  □ Understand blocked_cross_validation (run-level splits)
+  □ Review existing train_model methods in classifiers.R
+
+During implementation:
+  □ Add ar_order parameter to hrfdecoder_model()
+  □ Implement fit_ar_model() helper function
+  □ Implement apply_whitening() helper function
+  □ Modify train_model to estimate AR on X_train
+  □ Modify format_result to apply AR to X_test
+  □ Store ar_params in fit object
+
+Testing:
+  □ Unit tests for AR functions
+  □ Integration tests for train_model/format_result
+  □ Cross-validation independence tests
+  □ E2E searchlight tests
+  □ Performance comparison (with/without AR)
+
+FILES TO READ ALONGSIDE CODE:
+═════════════════════════════════════════════════════════════════════════════
+
+Implementation file:  /R/hrfdecoder_model.R
+   Train method:      Lines 175-210
+   Format method:     Lines 216-297
+   Merge method:      Lines 303-328
+
+Supporting files:
+   /R/allgeneric.R          (S3 generics)
+   /R/mvpa_iterate.R        (CV loop)
+   /R/classifiers.R         (example models)
+   /R/common.R              (normalization examples)
+
+═════════════════════════════════════════════════════════════════════════════
+For detailed implementation guidance, see:
+  rMVPA_ARCHITECTURE_REPORT.md → Section 9 (Recommended Preprocessing Architecture)
+═════════════════════════════════════════════════════════════════════════════
