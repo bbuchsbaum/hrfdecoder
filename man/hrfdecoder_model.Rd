@@ -5,7 +5,7 @@
 \title{Create an hrfdecoder model spec for rMVPA}
 \usage{
 hrfdecoder_model(
-  dataset,
+  dataset = NULL,
   design,
   lambda_W = 10,
   lambda_HRF = 1,
@@ -20,17 +20,53 @@ hrfdecoder_model(
   ar_method = c("ar", "arma"),
   ar_pooling = c("run", "global"),
   performance = NULL,
+  metrics = c("accuracy", "auc"),
+  primary_metric = "auc",
   crossval = NULL,
   return_predictions = TRUE,
   return_fits = FALSE
 )
 }
 \arguments{
+\item{dataset}{optional mvpa_dataset object (can be NULL if using rMVPA's run_searchlight)}
+
+\item{design}{mvpa_design object containing event_model and baseline_model}
+
+\item{lambda_W}{ridge penalty on decoder weights (default: 10)}
+
+\item{lambda_HRF}{prior strength pulling HRF toward canonical shape (default: 1)}
+
+\item{lambda_smooth}{temporal smoothness penalty on soft labels (default: 5)}
+
+\item{theta_penalty}{L2 penalty on HRF basis coefficients (default: 0.01)}
+
+\item{basis}{optional fmrihrf HRF basis specification (default: NULL uses "spmg1")}
+
+\item{window}{time window in seconds for trial aggregation, e.g., c(4, 8) (default: c(4, 8))}
+
+\item{nonneg}{logical; if TRUE, enforce non-negative decoder weights (default: TRUE)}
+
+\item{max_iter}{maximum number of alternating least squares iterations (default: 10)}
+
+\item{tol}{convergence tolerance for ALS algorithm (default: 1e-4)}
+
 \item{ar_order}{AR order for prewhitening (default: 1 for AR(1)). Set to NULL or 0 to disable.}
 
 \item{ar_method}{AR estimation method: "ar" or "arma". Default: "ar".}
 
 \item{ar_pooling}{Spatial pooling for AR: "global" or "run". Default: "run".}
+
+\item{performance}{optional custom performance function (default: NULL uses built-in)}
+
+\item{metrics}{character vector of performance metrics to compute, e.g., c("accuracy", "auc") (default: c("accuracy", "auc"))}
+
+\item{primary_metric}{character; which metric to use as primary for reporting (default: "auc")}
+
+\item{crossval}{optional cross-validation specification (default: NULL uses blocked_cross_validation if block_var exists)}
+
+\item{return_predictions}{logical; if TRUE, return predictions for each fold (default: TRUE)}
+
+\item{return_fits}{logical; if TRUE, return fitted model objects for each fold (default: FALSE)}
 }
 \description{
 Create an hrfdecoder model spec for rMVPA

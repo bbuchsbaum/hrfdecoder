@@ -211,8 +211,8 @@ test_that("AR parameters are applied consistently to test data", {
   )
 
   # Predict on test data
-  preds_tr <- predict_hrfdecoder(fit, Y_test, mode = "tr")
-  preds_trial <- predict_hrfdecoder(fit, Y_test,
+  preds_tr <- predict(fit, newdata = Y_test, mode = "tr")
+  preds_trial <- predict(fit, newdata = Y_test,
                                    ev_model_test = ev_model_test,
                                    mode = "trial")
 

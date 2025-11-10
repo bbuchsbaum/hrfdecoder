@@ -1,0 +1,100 @@
+---
+title: Performance metrics and confidence
+name: performance-metrics
+description: Fast, interpretable metrics for searchlight and block-aware confidence intervals.
+output:
+  rmarkdown::html_vignette:
+    toc: yes
+    toc_depth: 2
+params:
+  family: lapis
+  base_size: 13
+  content_width: 80
+css: albers.css
+vignette: '%\VignetteIndexEntry{Performance metrics and confidence} %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}'
+includes:
+  in_header: |-
+    <script>document.addEventListener('DOMContentLoaded',()=>document.body.classList.add('palette-red'));</script>
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse=TRUE, comment="#>", fig.align='center', message=FALSE, warning=FALSE)
+set.seed(1)
+```
+
+## Goal
+
+Show how to compute fast, interpretable metrics (AUC, accuracy, log loss, Brier, balanced accuracy) and simple block‑aware CIs suitable for searchlight workflows.
+
+## Quick example
+
+```{r}
+library(hrfdecode)
+library(fmridesign)
+
+# Small synthetic binary dataset
+n_trs <- 160; n_vox <- 30; tr <- 2; n_trials <- 32
+onsets <- seq(10, n_trs*tr-20, length.out=n_trials)
+conditions <- rep(c("A","B"), each=n_trials/2)
+events <- data.frame(onset=onsets, condition=conditions, duration=1)
+ev <- event_model(onset ~ hrf(condition, basis="spmg1"), data=events,
+                  block=~1, sampling_frame=fmrihrf::sampling_frame(TR=tr, blocklens=n_trs))
+
+# Build signal
+hrfb <- fmrihrf::evaluate(fmrihrf::getHRF("spmg2"), seq(0,24,by=tr))
+h <- as.numeric(hrfb %*% c(1,0))
+stick_A <- rep(0, n_trs); stick_B <- rep(0, n_trs)
+idx_A <- pmin(n_trs, pmax(1L, floor(onsets[conditions=="A"]/tr)+1L))
+idx_B <- pmin(n_trs, pmax(1L, floor(onsets[conditions=="B"]/tr)+1L))
+stick_A[idx_A] <- 1; stick_B[idx_B] <- 1
+sconv <- stats::convolve(stick_A - stick_B, rev(h), type='open')[1:n_trs]
+
+Y <- matrix(rnorm(n_trs*n_vox), n_trs, n_vox)
+for (v in 1:n_vox) Y[,v] <- Y[,v] + sconv * (v <= n_vox/2) * 0.6
+
+fit <- fit_hrfdecoder(Y, ev, lambda_W=0.1, max_iter=8, verbose=0)
+pred <- predict(fit, newdata=Y, ev_model_test=ev, mode='trial')
+hrf_metrics(pred$probs, pred$y_true, metrics=c('auc','accuracy','logloss','brier','bal_acc'))
+```
+
+## Block‑aware bootstrap CI (runs)
+
+```{r}
+# Simple percentile bootstrap that resamples run blocks
+block_boot <- function(probs, y_true, runs, B=200, metric='auc') {
+  lev <- colnames(probs)
+  runs <- as.integer(runs)
+  uniq <- sort(unique(runs))
+  comp <- function(p, y) hrf_metrics(p, y, metrics=metric)$value
+  base <- comp(probs, y_true)
+  if (length(uniq) <= 1L) return(list(stat=base, ci=c(NA_real_, NA_real_)))
+  vals <- numeric(B)
+  for (b in seq_len(B)) {
+    sel_runs <- sample(uniq, length(uniq), replace=TRUE)
+    idx <- unlist(lapply(sel_runs, function(r) which(runs==r)), use.names=FALSE)
+    vals[b] <- comp(probs[idx,,drop=FALSE], y_true[idx])
+  }
+  list(stat=base, ci=stats::quantile(vals, c(0.025, 0.975), na.rm=TRUE))
+}
+
+# Using the training runs as blocks (single run here for simplicity)
+res <- block_boot(pred$probs, pred$y_true, runs=rep(1L, nrow(pred$probs)), B=100, metric='auc')
+res
+```
+
+## rMVPA integration (metrics)
+
+```{r}
+# In rMVPA workflows, set metrics in the model spec
+design <- continuous_mvpa_design(ev, block_var = rep(1, nrow(fmridesign::design_matrix(ev))))
+model <- hrfdecoder_model(design=design, metrics=c('auc','accuracy'), primary_metric='auc')
+str(model$metrics)
+```
+
+## Notes
+
+- AUC is macro one‑vs‑rest for multi‑class; accuracy/logloss/Brier/balanced‑accuracy are multi‑class ready.
+- For searchlight, these metrics are computed per sphere with negligible overhead.
+- Use block_boot on fold results to obtain uncertainty while respecting run structure.
+

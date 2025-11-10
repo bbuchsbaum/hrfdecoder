@@ -1,23 +1,34 @@
 ---
-title: "AR prewhitening for temporal autocorrelation"
+title: AR prewhitening for temporal autocorrelation
 name: ar-prewhitening
-description: "Handle fMRI temporal autocorrelation with autoregressive prewhitening."
+description: Handle fMRI temporal autocorrelation with autoregressive prewhitening.
 output:
   rmarkdown::html_vignette:
-    toc: true
+    toc: yes
     toc_depth: 2
 params:
-  family: "lapis"
+  family: lapis
   base_size: 13
   content_width: 80
 css: albers.css
-vignette: >
-  %\VignetteIndexEntry{AR prewhitening for temporal autocorrelation}
-  %\VignetteEngine{knitr::rmarkdown}
-  %\VignetteEncoding{UTF-8}
+vignette: '%\VignetteIndexEntry{AR prewhitening for temporal autocorrelation} %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}'
+includes:
+  in_header: |-
+    <script>document.addEventListener('DOMContentLoaded',()=>document.body.classList.add('palette-red'));</script>
+    <script src="albers.js"></script>
+resource_files:
+- albers.css
+- albers.js
+
 ---
 
 ```{r setup, include=FALSE}
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment  = "#>",
@@ -34,8 +45,10 @@ options(pillar.sigfig = 7, width = 80)
 
 library(ggplot2)
 if (requireNamespace("albersdown", quietly = TRUE)) {
-      theme_set(albersdown::theme_albers(params$family, base_size = params$base_size))
-
+      ggplot2::theme_set(albersdown::theme_albers(params$family, base_size = params$base_size))
+} else {
+      ggplot2::theme_set(hrfdecode::theme_albers(base_family = params$family, base_size = params$base_size))
+}
 ```
 
 ## Goal {#goal}
@@ -150,6 +163,7 @@ for (v in 1:n_voxels) {
     eps[t] <- phi_true * eps[t - 1] + rnorm(1)
   }
   Y_ar[, v] <- eps + signal_conv * (v <= n_voxels / 2) * 0.5
+}
 ```
 
 Now fit with and without AR(1) prewhitening to compare.
@@ -233,6 +247,7 @@ for (v in 1:n_voxels) {
     eps2[t] <- phi_run2 * eps2[t - 1] + rnorm(1)
   }
   Y_multi[, v] <- c(eps1, eps2)
+}
 ```
 
 Fit with run-specific AR:
@@ -286,10 +301,11 @@ for (v in 1:n_voxels) {
   Y_test[, v] <- eps + signal_conv * (v <= n_voxels / 2) * 0.5
 
 # Predictions with AR(1) model
-pred_ar1 <- predict_hrfdecoder(fit_ar1, Y_test = Y_test, ev_model_test = ev_model, mode = "trial")
+}
+pred_ar1 <- predict(fit_ar1, newdata = Y_test, ev_model_test = ev_model, mode = "trial")
 
 # Predictions without AR
-pred_none <- predict_hrfdecoder(fit_none, Y_test = Y_test, ev_model_test = ev_model, mode = "trial")
+pred_none <- predict(fit_none, newdata = Y_test, ev_model_test = ev_model, mode = "trial")
 
 # Compare accuracy
 true_labels <- ifelse(conditions == "A", 1, -1)
@@ -320,7 +336,7 @@ if (requireNamespace("ggplot2", quietly = TRUE)) {
     geom_point(alpha = 0.7, size = 2) +
     geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
     facet_wrap(~ method, ncol = 1) +
-    albersdown::scale_color_albers(params$family) +
+    (if (requireNamespace("albersdown", quietly = TRUE)) albersdown::scale_color_albers(params$family) else ggplot2::scale_color_discrete()) +
     labs(
       title = "Effect of AR prewhitening on predictions",
       subtitle = "AR(1) correction improves signal-to-noise ratio",
@@ -328,6 +344,7 @@ if (requireNamespace("ggplot2", quietly = TRUE)) {
       y = "Soft label prediction",
       color = "Condition"
     )
+}
 ```
 
 ## When to use AR prewhitening {#when-to-use}

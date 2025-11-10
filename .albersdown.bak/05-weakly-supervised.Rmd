@@ -1,0 +1,456 @@
+---
+title: Weakly supervised learning for fMRI
+name: weakly-supervised
+description: Deep dive into the alternating least squares algorithm and parameter
+  tuning.
+output:
+  rmarkdown::html_vignette:
+    toc: yes
+    toc_depth: 2
+params:
+  family: lapis
+  base_size: 13
+  content_width: 80
+css: albers.css
+vignette: '%\VignetteIndexEntry{Weakly supervised learning for fMRI} %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}'
+includes:
+  in_header: |-
+    <script>document.addEventListener('DOMContentLoaded',()=>document.body.classList.add('palette-red'));</script>
+    <script src="albers.js"></script>
+resource_files:
+- albers.css
+- albers.js
+
+---
+
+```{r setup, include=FALSE}
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>",
+  fig.align = "center",
+  fig.retina = 2,
+  out.width = "100%",
+  message = FALSE,
+  warning = FALSE,
+  fig.width = 7,
+  fig.asp = 0.618
+)
+set.seed(123)
+options(pillar.sigfig = 7, width = 80)
+
+library(ggplot2)
+if (requireNamespace("albersdown", quietly = TRUE)) {
+      ggplot2::theme_set(albersdown::theme_albers(params$family, base_size = params$base_size))
+} else {
+      ggplot2::theme_set(hrfdecode::theme_albers(base_family = params$family, base_size = params$base_size))
+}
+```
+
+## Goal {#goal}
+
+Understand the weakly supervised learning framework underlying `hrfdecode`, including the alternating least squares algorithm, regularization parameters, and convergence diagnostics.
+
+## TL;DR {#tldr}
+
+```{r tldr, eval=FALSE}
+library(hrfdecode)
+
+# Fit with custom regularization
+fit <- fit_hrfdecoder(
+  Y = fmri_data,
+  ev_model = ev_model,
+  base_model = bl_model,
+  lambda_W = 0.5,        # Ridge penalty on decoder weights
+  lambda_HRF = 0.01,     # HRF prior strength
+  lambda_smooth = 0.1,   # Temporal smoothness on soft labels
+  theta_penalty = 0.01,  # HRF coefficient L2 penalty
+  max_iter = 20,         # Maximum ALS iterations
+  tol = 1e-4,            # Convergence tolerance
+  verbose = TRUE         # Show iteration progress
+)
+
+# Inspect convergence
+fit$convergence
+```
+
+## What is weakly supervised learning? {#weakly-supervised}
+
+Traditional supervised learning requires **strong labels**: explicit trial-level class assignments. For fMRI, this means:
+
+- Averaging BOLD across trial duration
+- Assigning discrete labels (e.g., "face" vs. "scene")
+- Training classifier on (averaged data, labels) pairs
+
+**Weakly supervised learning** relaxes this requirement. Instead of trial labels, we provide:
+
+- **Event onsets**: When stimuli occurred
+- **Condition labels**: What type of stimulus (but not trial outcome)
+- **Continuous time series**: Full BOLD data, not trial averages
+
+The algorithm then **jointly infers**:
+
+1. **Soft labels** (y): Continuous trial predictions
+2. **HRF** (θ): Hemodynamic response parameters
+3. **Decoder** (W): Voxel weights
+
+This is "weak" supervision because we don't specify the trial-level BOLD patterns—only the experimental structure.
+
+## The alternating least squares algorithm {#als-algorithm}
+
+The optimization problem is:
+
+$$
+\min_{y, \theta, W} \| Y - X(\theta) y W^T \|^2 + \lambda_W \|W\|^2 + \lambda_{HRF} \|\theta - \theta_0\|^2 + \lambda_{smooth} \|Ly\|^2
+$$
+
+Where:
+
+- **Y**: fMRI data (T × V)
+- **X(θ)**: Design matrix convolved with HRF(θ)
+- **y**: Soft labels (N × 1)
+- **W**: Decoder weights (V × 1)
+- **L**: Laplacian for temporal smoothness
+
+This is **non-convex** in (y, θ, W) jointly, but **convex in each variable** when others are fixed. ALS exploits this:
+
+### ALS steps {#als-steps}
+
+```
+Initialize: y₀, θ₀, W₀
+For iteration t = 1, 2, ..., max_iter:
+
+  1. Update soft labels:
+     y_t = argmin_y || Y - X(θ_{t-1}) y W_{t-1}^T ||^2 + λ_smooth ||Ly||^2
+
+  2. Update HRF:
+     θ_t = argmin_θ || Y - X(θ) y_t W_{t-1}^T ||^2 + λ_HRF ||θ - θ₀||^2
+
+  3. Update decoder:
+     W_t = argmin_W || Y - X(θ_t) y_t W^T ||^2 + λ_W ||W||^2
+
+  If || (y_t, θ_t, W_t) - (y_{t-1}, θ_{t-1}, W_{t-1}) || < tol:
+    Break (converged)
+```
+
+Each step is a **regularized least squares** problem with closed-form solution.
+
+## Regularization parameters {#regularization}
+
+Four main parameters control the optimization:
+
+### lambda_W: Decoder ridge penalty {#lambda-w}
+
+Controls decoder complexity via L2 penalty on weights.
+
+- **Low (0.01)**: Complex decoder, risk of overfitting
+- **Medium (0.1)**: Default, good balance
+- **High (1.0)**: Simple decoder, risk of underfitting
+
+**When to increase**: Many voxels, low SNR, small sample
+**When to decrease**: Few voxels, high SNR, large sample
+
+### lambda_HRF: HRF prior strength {#lambda-hrf}
+
+Pulls HRF toward canonical shape.
+
+- **Low (0.001)**: Data-driven HRF, high flexibility
+- **Medium (0.01)**: Default, gentle regularization
+- **High (1.0)**: Nearly fixed canonical HRF
+
+**When to increase**: Uncertain HRF, low SNR, standard populations
+**When to decrease**: Known HRF deviation, high SNR, atypical populations
+
+### lambda_smooth: Soft label smoothness {#lambda-smooth}
+
+Encourages temporal smoothness in soft labels across trials.
+
+- **Low (0)**: Independent trial labels
+- **Medium (0.1)**: Gentle smoothing
+- **High (1.0)**: Strong smoothness (assumes slow label drift)
+
+**When to increase**: Blocked designs, gradual condition changes
+**When to decrease**: Event-related designs, rapid switching
+
+### theta_penalty: HRF coefficient penalty {#theta-penalty}
+
+Additional L2 penalty on HRF basis coefficients (beyond prior).
+
+- **Default (0.01)**: Light regularization
+- Can prevent extreme HRF shapes
+
+## Practical parameter tuning {#parameter-tuning}
+
+### Strategy 1: Grid search {#grid-search}
+
+```{r grid-search-example, eval=FALSE}
+# Setup (assuming data and models are defined)
+library(hrfdecode)
+
+# Parameter grid
+lambda_W_values <- c(0.01, 0.1, 0.5, 1.0)
+results <- list()
+
+for (i in seq_along(lambda_W_values)) {
+  fit <- fit_hrfdecoder(
+    Y = Y_train,
+    ev_model = ev_model,
+    base_model = bl_model,
+    lambda_W = lambda_W_values[i],
+    verbose = FALSE
+  )
+
+  # Evaluate on validation set
+  preds <- predict(fit, newdata = Y_val, mode = "trial")
+  acc <- mean(sign(preds) == true_labels_val)
+
+  results[[i]] <- list(lambda_W = lambda_W_values[i], accuracy = acc)
+
+# Select best
+best_idx <- which.max(sapply(results, function(x) x$accuracy))
+best_lambda_W <- results[[best_idx]]$lambda_W
+```
+
+### Strategy 2: Cross-validation {#cross-validation}
+
+Integrate with rMVPA for automatic parameter selection:
+
+```{r cv-tuning-example, eval=FALSE}
+library(rMVPA)
+
+# Define parameter grid
+param_grid <- expand.grid(
+  lambda_W = c(0.1, 0.5, 1.0),
+  lambda_HRF = c(0.001, 0.01, 0.1)
+)
+
+# Cross-validate each combination
+# (Conceptual; requires rMVPA infrastructure)
+# cv_results <- tune_parameters(hrfdecoder_model, param_grid, cv_folds = 5)
+```
+
+### Strategy 3: Heuristics {#heuristics}
+
+Rule-of-thumb starting points:
+
+- **lambda_W**: 0.1 × (number of voxels / number of trials)
+- **lambda_HRF**: 0.01 (rarely needs tuning)
+- **lambda_smooth**: 0 for event-related, 0.1-0.5 for block designs
+- **theta_penalty**: 0.01 (fixed)
+
+## Convergence diagnostics {#convergence}
+
+Monitor convergence to ensure optimization succeeded.
+
+```{r setup-convergence-example}
+library(hrfdecode)
+library(fmridesign)
+
+# Simple simulation
+n_trs <- 150
+n_voxels <- 30
+n_trials <- 30
+tr <- 2
+
+onsets <- seq(10, n_trs * tr - 20, length.out = n_trials)
+conditions <- rep(c("A", "B"), each = n_trials / 2)
+event_table <- data.frame(onset = onsets, condition = conditions, duration = 1)
+
+  ev_model <- event_model(
+  onset ~ hrf(condition, basis = "spmg1"),
+  data = event_table,
+  block = ~ 1,
+  sampling_frame = fmrihrf::sampling_frame(TR = tr, blocklens = n_trs)
+)
+  bl_model <- baseline_model(basis = "bs", degree = 3,
+                           sframe = fmrihrf::sampling_frame(TR = tr, blocklens = n_trs))
+
+# Simulate data
+hrf_basis <- fmrihrf::evaluate(fmrihrf::getHRF("spmg2"), seq(0, 24, by = tr))
+hrf_vec <- as.numeric(hrf_basis %*% c(1, 0))
+stick_A <- rep(0, n_trs); stick_B <- rep(0, n_trs)
+idx_A <- pmin(n_trs, pmax(1L, floor(event_table$onset[event_table$condition == "A"] / tr) + 1L))
+idx_B <- pmin(n_trs, pmax(1L, floor(event_table$onset[event_table$condition == "B"] / tr) + 1L))
+stick_A[idx_A] <- 1; stick_B[idx_B] <- 1
+signal <- stick_A - stick_B
+signal_conv <- stats::convolve(signal, rev(hrf_vec), type = "open")[1:n_trs]
+
+Y_data <- matrix(rnorm(n_trs * n_voxels), n_trs, n_voxels)
+for (v in 1:n_voxels) {
+  Y_data[, v] <- Y_data[, v] + signal_conv * (v <= n_voxels / 2) * 0.5
+}
+```
+
+Fit with convergence tracking:
+
+```{r fit-with-convergence}
+fit <- fit_hrfdecoder(
+  Y = Y_data,
+  ev_model = ev_model,
+  base_model = bl_model,
+  lambda_W = 0.1,
+  max_iter = 15,
+  tol = 1e-4,
+  verbose = FALSE
+)
+
+# Inspect convergence info
+names(fit$convergence)
+```
+
+```{r check-convergence}
+# Did it converge?
+if (!is.null(fit$convergence$converged)) {
+  cat("Converged:", fit$convergence$converged, "\n")
+  if (fit$convergence$converged) {
+    cat("Iterations:", fit$convergence$iterations, "\n")
+  }
+} else {
+  cat("Convergence info not available in this version\n")
+}
+```
+
+### Warning signs {#warning-signs}
+
+- **Max iterations reached**: Increase `max_iter` or check parameter values
+- **Oscillating objective**: Reduce learning rate (not exposed) or increase regularization
+- **Very few iterations**: May indicate poor initialization or trivial solution
+
+## Understanding soft labels {#soft-labels}
+
+Soft labels represent the algorithm's continuous predictions for each trial.
+
+```{r inspect-soft-labels}
+# Extract soft labels by aggregating TR-level predictions to trials
+pred_train <- predict_hrfdecoder(fit, Y_test = Y_data, ev_model_test = ev_model, mode = "trial")
+# For two-class case, define a signed margin (A vs B)
+y_soft <- as.numeric(pred_train$probs[, 1] - pred_train$probs[, 2])
+
+# Summary
+cat("Soft label range:", round(range(y_soft), 3), "\n")
+cat("Mean absolute value:", round(mean(abs(y_soft)), 3), "\n")
+
+# For binary classification, expect negative/positive split
+true_labels <- ifelse(conditions == "A", 1, -1)
+cat("\nCorrelation with true labels:", round(cor(y_soft, true_labels), 3), "\n")
+```
+
+```{r plot-soft-labels, fig.cap="Soft labels learned during training. Continuous predictions capture graded trial-level responses rather than hard class assignments."}
+if (requireNamespace("ggplot2", quietly = TRUE)) {
+  library(ggplot2)
+
+  plot_df <- data.frame(
+    trial = 1:n_trials,
+    soft_label = y_soft,
+    condition = conditions,
+    true_label = true_labels
+  )
+
+  ggplot(plot_df, aes(x = trial, y = soft_label, color = condition)) +
+    geom_point(size = 2.5) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
+    (if (requireNamespace("albersdown", quietly = TRUE)) albersdown::scale_color_albers(params$family) else ggplot2::scale_color_discrete()) +
+    labs(
+      title = "Learned soft labels",
+      subtitle = "Continuous trial predictions from weakly supervised learning",
+      x = "Trial number",
+      y = "Soft label value",
+      color = "Condition"
+    )
+}
+```
+
+Soft labels can reveal:
+
+- **Graded responses**: Some trials are "more typical" than others
+- **Learning effects**: Early vs. late trials may differ
+- **Attention lapses**: Outlier trials with weak predictions
+
+## Computational complexity {#complexity}
+
+Each ALS iteration involves:
+
+1. **Soft label update**: O(N³) for N trials (Laplacian solve)
+2. **HRF update**: O(K³) for K basis functions (typically K = 2-3)
+3. **Decoder update**: O(V³) for V voxels (ridge regression)
+
+**Bottleneck**: Decoder update when V is large (thousands of voxels).
+
+**Speedup strategies**:
+
+- **Prewhitening**: Reduces effective dimensionality
+- **Rank reduction**: Automatic nuisance rank estimation
+- **Sparse solvers**: Exploit structure in design matrices
+
+Typical runtime: 1-5 seconds for 100 trials × 100 voxels on modern hardware.
+
+## Advanced topics {#advanced}
+
+### Custom initialization {#initialization}
+
+The algorithm initializes:
+
+- **y**: Random normal or based on condition means
+- **θ**: Canonical HRF (1, 0, ...)
+- **W**: Ridge regression on initial y
+
+Custom initialization (not currently exposed) could improve convergence for difficult cases.
+
+### Alternative optimizers {#optimizers}
+
+ALS is simple and stable but not always fastest. Alternatives:
+
+- **Coordinate descent**: Update each parameter sequentially
+- **Gradient descent**: First-order optimization
+- **ADMM**: Alternating direction method of multipliers
+
+Current implementation uses ALS for reliability and interpretability.
+
+## Debugging common issues {#debugging}
+
+### Issue: Poor predictions {#poor-predictions}
+
+**Symptoms**: Random or below-chance accuracy
+
+**Possible causes**:
+
+1. **Over-regularization**: Try decreasing `lambda_W`
+2. **Wrong HRF**: Try flexible HRF (`lambda_HRF = 0.001`)
+3. **Insufficient iterations**: Increase `max_iter`
+4. **Misspecified design**: Check event model timing
+
+### Issue: Slow convergence {#slow-convergence}
+
+**Symptoms**: Reaches `max_iter` without converging
+
+**Possible causes**:
+
+1. **Weak signal**: Increase regularization
+2. **Conflicting constraints**: Check lambda values
+3. **Poor scaling**: Ensure data is standardized
+
+### Issue: Extreme soft labels {#extreme-labels}
+
+**Symptoms**: `y_soft` values >> 1 in magnitude
+
+**Possible causes**:
+
+1. **Under-regularization**: Increase `lambda_smooth`
+2. **Overfitting**: Increase `lambda_W`
+
+## Next steps {#next-steps}
+
+- [Getting Started](01-getting-started.html) — Basic usage tutorial
+- [AR Prewhitening](02-ar-prewhitening.html) — Handle temporal autocorrelation
+- [rMVPA Integration](03-rmvpa-integration.html) — Cross-validation framework
+- [HRF Estimation](04-hrf-estimation.html) — Joint HRF learning
+
+## Session info {#session-info}
+
+```{r session-info}
+sessioninfo::session_info(pkgs = "hrfdecode")
+```

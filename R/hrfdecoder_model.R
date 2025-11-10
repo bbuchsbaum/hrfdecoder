@@ -1,7 +1,24 @@
 #' Create an hrfdecoder model spec for rMVPA
+#' @param dataset optional mvpa_dataset object (can be NULL if using rMVPA's run_searchlight)
+#' @param design mvpa_design object containing event_model and baseline_model
+#' @param lambda_W ridge penalty on decoder weights (default: 10)
+#' @param lambda_HRF prior strength pulling HRF toward canonical shape (default: 1)
+#' @param lambda_smooth temporal smoothness penalty on soft labels (default: 5)
+#' @param theta_penalty L2 penalty on HRF basis coefficients (default: 0.01)
+#' @param basis optional fmrihrf HRF basis specification (default: NULL uses "spmg1")
+#' @param window time window in seconds for trial aggregation, e.g., c(4, 8) (default: c(4, 8))
+#' @param nonneg logical; if TRUE, enforce non-negative decoder weights (default: TRUE)
+#' @param max_iter maximum number of alternating least squares iterations (default: 10)
+#' @param tol convergence tolerance for ALS algorithm (default: 1e-4)
 #' @param ar_order AR order for prewhitening (default: 1 for AR(1)). Set to NULL or 0 to disable.
 #' @param ar_method AR estimation method: "ar" or "arma". Default: "ar".
 #' @param ar_pooling Spatial pooling for AR: "global" or "run". Default: "run".
+#' @param performance optional custom performance function (default: NULL uses built-in)
+#' @param metrics character vector of performance metrics to compute, e.g., c("accuracy", "auc") (default: c("accuracy", "auc"))
+#' @param primary_metric character; which metric to use as primary for reporting (default: "auc")
+#' @param crossval optional cross-validation specification (default: NULL uses blocked_cross_validation if block_var exists)
+#' @param return_predictions logical; if TRUE, return predictions for each fold (default: TRUE)
+#' @param return_fits logical; if TRUE, return fitted model objects for each fold (default: FALSE)
 #' @export
 hrfdecoder_model <- function(dataset = NULL, design,
                              lambda_W = 10,
@@ -17,6 +34,8 @@ hrfdecoder_model <- function(dataset = NULL, design,
                              ar_method = c("ar", "arma"),
                              ar_pooling = c("run", "global"),
                              performance = NULL,
+                             metrics = c("accuracy", "auc"),
+                             primary_metric = "auc",
                              crossval = NULL,
                              return_predictions = TRUE,
                              return_fits = FALSE) {
@@ -44,6 +63,8 @@ hrfdecoder_model <- function(dataset = NULL, design,
     performance = performance,
     compute_performance = TRUE,
     return_predictions = return_predictions,
+    metrics = metrics,
+    primary_metric = primary_metric,
     return_fits = return_fits
   )
   class(obj) <- "hrfdecoder_model"
@@ -99,9 +120,9 @@ format_result.hrfdecoder_model <- function(obj, result, error_message = NULL, co
     ))
   }
   Xtest <- as.matrix(context$test)
-  preds <- predict_hrfdecoder(
+  preds <- predict(
     object = result$fit,
-    Y_test = Xtest,
+    newdata = Xtest,
     ev_model_test = obj$design$event_model,
     mode = "trial",
     window = obj$window
@@ -133,11 +154,20 @@ merge_results.hrfdecoder_model <- function(obj, result_set, indices, id, ...) {
     ))
   }
   combined <- wrap_classification_result_from_folds(result_set)
-  perf <- compute_acc_perf(combined)
+  perf <- compute_acc_perf(combined, metrics = obj$metrics %||% c("accuracy"))
+  # Flag primary metric for convenience
+  if (!is.null(obj$primary_metric)) {
+    perf$primary <- perf$metric == obj$primary_metric
+  }
+  # Also surface primary metric/value at the top-level for easy tabulation
+  pm <- obj$primary_metric %||% (perf$metric[1] %||% NA_character_)
+  pv <- tryCatch({ perf$value[match(pm, perf$metric)] }, error = function(e) NA_real_)
   tibble::tibble(
     result = list(combined),
     indices = list(indices),
     performance = list(perf),
+    primary_metric = pm,
+    primary_value = pv,
     id = id,
     error = FALSE,
     error_message = NA_character_
@@ -154,7 +184,8 @@ wrap_classification_result_from_folds <- function(result_set) {
 }
 
 #' @keywords internal
-compute_acc_perf <- function(result) {
-  acc <- mean(result$class == result$y_true)
-  tibble::tibble(metric = "accuracy", value = acc)
+compute_acc_perf <- function(result, metrics = c("accuracy")) {
+  probs <- result$probs
+  y_true <- result$y_true
+  compute_metrics(probs, y_true, metrics = metrics)
 }

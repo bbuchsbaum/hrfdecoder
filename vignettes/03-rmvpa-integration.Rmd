@@ -1,23 +1,34 @@
 ---
-title: "Integrating with rMVPA workflows"
+title: Integrating with rMVPA workflows
 name: rmvpa-integration
-description: "Run searchlight analysis and cross-validation using the rMVPA framework."
+description: Run searchlight analysis and cross-validation using the rMVPA framework.
 output:
   rmarkdown::html_vignette:
-    toc: true
+    toc: yes
     toc_depth: 2
 params:
-  family: "lapis"
+  family: lapis
   base_size: 13
   content_width: 80
 css: albers.css
-vignette: >
-  %\VignetteIndexEntry{Integrating with rMVPA workflows}
-  %\VignetteEngine{knitr::rmarkdown}
-  %\VignetteEncoding{UTF-8}
+vignette: '%\VignetteIndexEntry{Integrating with rMVPA workflows} %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}'
+includes:
+  in_header: |-
+    <script>document.addEventListener('DOMContentLoaded',()=>document.body.classList.add('palette-red'));</script>
+    <script src="albers.js"></script>
+resource_files:
+- albers.css
+- albers.js
+
 ---
 
 ```{r setup, include=FALSE}
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment  = "#>",
@@ -34,8 +45,10 @@ options(pillar.sigfig = 7, width = 80)
 
 library(ggplot2)
 if (requireNamespace("albersdown", quietly = TRUE)) {
-      theme_set(albersdown::theme_albers(params$family, base_size = params$base_size))
-
+      ggplot2::theme_set(albersdown::theme_albers(params$family, base_size = params$base_size))
+} else {
+      ggplot2::theme_set(hrfdecode::theme_albers(base_family = params$family, base_size = params$base_size))
+}
 ```
 
 ## Goal {#goal}
@@ -50,7 +63,7 @@ library(rMVPA)
 library(fmridesign)
 library(fmrihrf)
 
-# Build event_model and design using rMVPA helper
+# Build event_model and design using helper
 sframe <- fmrihrf::sampling_frame(TR = 2, blocklens = c(200, 200))
 ev_model <- fmridesign::event_model(
   onset ~ fmridesign::hrf(condition, basis = "spmg1"),
@@ -59,9 +72,11 @@ ev_model <- fmridesign::event_model(
   sampling_frame = sframe
 )
 block_ids <- rep(1:2, each = 200)
-design <- rMVPA::hrfdecoder_design(event_model = ev_model,
-                                   events = events,
-                                   block_var = block_ids)
+design <- hrfdecode::continuous_mvpa_design(
+  event_model = ev_model,
+  block_var = block_ids,
+  design_df_events = events
+)
 
 # Create hrfdecoder model specification
 model <- hrfdecoder_model(
@@ -143,10 +158,12 @@ ev_model <- fmridesign::event_model(
 # Block/run ids per TR (length equals total TRs across runs)
 block_ids <- rep(1:2, each = n_trs_per_run)
 
-# Create hrfdecoder design via rMVPA helper
-design <- rMVPA::hrfdecoder_design(event_model = ev_model,
-                                   events = event_table,
-                                   block_var = block_ids)
+# Create hrfdecoder design via helper
+design <- hrfdecode::continuous_mvpa_design(
+  event_model = ev_model,
+  block_var = block_ids,
+  design_df_events = event_table
+)
 
 # Inspect design object
 class(design)
@@ -303,9 +320,11 @@ ev_model_multi <- fmridesign::event_model(
   sampling_frame = sframe_multi
 )
 block_ids_multi <- rep(1:2, each = n_trs_per_run)
-design_multi <- rMVPA::hrfdecoder_design(event_model = ev_model_multi,
-                                         events = event_table,
-                                         block_var = block_ids_multi)
+design_multi <- hrfdecode::continuous_mvpa_design(
+  event_model = ev_model_multi,
+  block_var = block_ids_multi,
+  design_df_events = event_table
+)
 ```
 
 ## Interpreting results {#interpretation}

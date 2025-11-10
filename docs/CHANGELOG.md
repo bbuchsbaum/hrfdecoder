@@ -8,13 +8,14 @@ All notable changes to hrfdecoder will be documented in this file.
 
 - **AR Prewhitening Support**: Full integration with fmriAR for temporal
   autocorrelation correction
-  - New parameters in [`fit_hrfdecoder()`](reference/fit_hrfdecoder.md):
+  - New parameters in
+    [`fit_hrfdecoder()`](https://bbuchsbaum.github.io/hrfdecoder/reference/fit_hrfdecoder.md):
     `ar_order`, `ar_method`, `ar_pooling`
   - Supports AR(p), ARMA(p,q), and automatic order selection via BIC
   - Run-specific and global AR parameter pooling
   - Seamless test data application (AR plan stored and reused)
   - rMVPA integration with default `ar_order = 1` in
-    [`hrfdecoder_model()`](reference/hrfdecoder_model.md)
+    [`hrfdecoder_model()`](https://bbuchsbaum.github.io/hrfdecoder/reference/hrfdecoder_model.md)
 
 ### Changed
 
@@ -34,7 +35,7 @@ All notable changes to hrfdecoder will be documented in this file.
   with run-aware boundary resets
 - Test data automatically whitened using stored AR plan from training
 - Helper function
-  [`.get_run_ids_from_test_data()`](reference/dot-get_run_ids_from_test_data.md)
+  [`.get_run_ids_from_test_data()`](https://bbuchsbaum.github.io/hrfdecoder/reference/dot-get_run_ids_from_test_data.md)
   extracts run structure for test application
 
 ### Documentation
@@ -70,7 +71,7 @@ All notable changes to hrfdecoder will be documented in this file.
 - Baseline residualization via
   [`fmridesign::residualize()`](https://bbuchsbaum.github.io/fmridesign/reference/residualize.html)
 - rMVPA plugin architecture with
-  [`hrfdecoder_model()`](reference/hrfdecoder_model.md)
+  [`hrfdecoder_model()`](https://bbuchsbaum.github.io/hrfdecoder/reference/hrfdecoder_model.md)
 - Multi-run support with block-diagonal Laplacian
 - ALS solver with convergence diagnostics
 

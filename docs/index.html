@@ -10,17 +10,15 @@
 <link href="deps/bootstrap-5.3.1/bootstrap.min.css" rel="stylesheet">
 <script src="deps/bootstrap-5.3.1/bootstrap.bundle.min.js"></script><link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
-<script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="hrfdecode • HRF-Aware Weakly Supervised MVPA Decoder">
+<script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><link href="extra.css" rel="stylesheet">
+<script src="extra.js"></script><meta property="og:title" content="hrfdecode • HRF-Aware Weakly Supervised MVPA Decoder">
 <meta name="description" content="Jointly estimate soft labels, HRF parameters, and multivariate decoders directly from fMRI time series and event models.
 ">
 <meta property="og:description" content="Jointly estimate soft labels, HRF parameters, and multivariate decoders directly from fMRI time series and event models.
 ">
-<style>
-:root {
-  --albers-bg: #fff;
-  --albers-fg: #111;
-  --albers-accent: #1f6feb;
-}
+<script>document.addEventListener('DOMContentLoaded', function(){ document.body.classList.add('palette-red'); });</script><style>
+  body.palette-red { --albers-accent: #d61f1f; --albers-link: #d61f1f; }
+  .navbar-nav .nav-link { line-height: 1.25; padding-top: 0.5rem; padding-bottom: 0.5rem; }
 </style>
 </head>
 <body>
@@ -68,9 +66,28 @@
   </div>
 </nav><div class="container template-home">
 <div class="row">
-  <main id="main" class="col-md-9">
-Jointly estimate soft labels, HRF (in an fmrihrf basis), and a multivariate decoder directly from fMRI time series and fmridesign event/baseline models.
-  </main><aside class="col-md-3"><div class="license">
+  <main id="main" class="col-md-9"><div class="section level1">
+<div class="page-header"><h1 id="hrfdecode">hrfdecode<a class="anchor" aria-label="anchor" href="#hrfdecode"></a>
+</h1></div>
+<div class="callout">
+<p><strong>Primary metric</strong>: In rMVPA integrations, results flag a primary metric and value (default <em>AUC (macro one‑vs‑one)</em>). Configure via <code>hrfdecoder_model(metrics = c(‘auc_ovo’,‘accuracy’), primary_metric = ‘auc_ovo’)</code>. See the <a href="articles/06-performance-metrics.html">Performance metrics</a> article.</p>
+</div>
+<p>HRF‑aware weakly supervised decoding directly from fMRI time series and event timing. Joint estimation of soft labels, HRF parameters, and decoder weights via alternating least squares with temporal smoothing and optional AR prewhitening.</p>
+<ul>
+<li>Get started: articles/01-getting-started.html</li>
+<li>Metrics and confidence: articles/06-performance-metrics.html</li>
+<li>Reference: reference/index.html</li>
+</ul>
+</div>
+  </main><aside class="col-md-3"><div class="links">
+<h2 data-toc-skip>Links</h2>
+<ul class="list-unstyled">
+<li><a href="articles/06-performance-metrics.html">Performance metrics</a></li>
+<li><a href="reference/index.html">Reference</a></li>
+</ul>
+</div>
+
+<div class="license">
 <h2 data-toc-skip>License</h2>
 <ul class="list-unstyled">
 <li>

@@ -26,6 +26,8 @@ aggregate_events(
 \item{window}{time window (s) after onset}
 
 \item{hrf}{optional fmrihrf HRF object for weighting}
+
+\item{normalize}{logical; if TRUE, normalize per-event probabilities to sum to 1 across conditions (default: FALSE)}
 }
 \value{
 list with probs matrix and y_true factor

@@ -1,23 +1,35 @@
 ---
-title: "Weakly supervised learning for fMRI"
+title: Weakly supervised learning for fMRI
 name: weakly-supervised
-description: "Deep dive into the alternating least squares algorithm and parameter tuning."
+description: Deep dive into the alternating least squares algorithm and parameter
+  tuning.
 output:
   rmarkdown::html_vignette:
-    toc: true
+    toc: yes
     toc_depth: 2
 params:
-  family: "lapis"
+  family: lapis
   base_size: 13
   content_width: 80
 css: albers.css
-vignette: >
-  %\VignetteIndexEntry{Weakly supervised learning for fMRI}
-  %\VignetteEngine{knitr::rmarkdown}
-  %\VignetteEncoding{UTF-8}
+vignette: '%\VignetteIndexEntry{Weakly supervised learning for fMRI} %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}'
+includes:
+  in_header: |-
+    <script>document.addEventListener('DOMContentLoaded',()=>document.body.classList.add('palette-red'));</script>
+    <script src="albers.js"></script>
+resource_files:
+- albers.css
+- albers.js
+
 ---
 
 ```{r setup, include=FALSE}
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment  = "#>",
@@ -34,8 +46,10 @@ options(pillar.sigfig = 7, width = 80)
 
 library(ggplot2)
 if (requireNamespace("albersdown", quietly = TRUE)) {
-      theme_set(albersdown::theme_albers(params$family, base_size = params$base_size))
-
+      ggplot2::theme_set(albersdown::theme_albers(params$family, base_size = params$base_size))
+} else {
+      ggplot2::theme_set(hrfdecode::theme_albers(base_family = params$family, base_size = params$base_size))
+}
 ```
 
 ## Goal {#goal}
@@ -269,6 +283,7 @@ signal_conv <- stats::convolve(signal, rev(hrf_vec), type = "open")[1:n_trs]
 Y_data <- matrix(rnorm(n_trs * n_voxels), n_trs, n_voxels)
 for (v in 1:n_voxels) {
   Y_data[, v] <- Y_data[, v] + signal_conv * (v <= n_voxels / 2) * 0.5
+}
 ```
 
 Fit with convergence tracking:
@@ -297,6 +312,7 @@ if (!is.null(fit$convergence$converged)) {
   }
 } else {
   cat("Convergence info not available in this version\n")
+}
 ```
 
 ### Warning signs {#warning-signs}
@@ -311,7 +327,7 @@ Soft labels represent the algorithm's continuous predictions for each trial.
 
 ```{r inspect-soft-labels}
 # Extract soft labels by aggregating TR-level predictions to trials
-pred_train <- predict_hrfdecoder(fit, Y_test = Y_data, ev_model_test = ev_model, mode = "trial")
+pred_train <- predict(fit, newdata = Y_data, ev_model_test = ev_model, mode = "trial")
 # For two-class case, define a signed margin (A vs B)
 y_soft <- as.numeric(pred_train$probs[, 1] - pred_train$probs[, 2])
 
@@ -338,7 +354,7 @@ if (requireNamespace("ggplot2", quietly = TRUE)) {
   ggplot(plot_df, aes(x = trial, y = soft_label, color = condition)) +
     geom_point(size = 2.5) +
     geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
-    albersdown::scale_color_albers(params$family) +
+    (if (requireNamespace("albersdown", quietly = TRUE)) albersdown::scale_color_albers(params$family) else ggplot2::scale_color_discrete()) +
     labs(
       title = "Learned soft labels",
       subtitle = "Continuous trial predictions from weakly supervised learning",
@@ -346,6 +362,7 @@ if (requireNamespace("ggplot2", quietly = TRUE)) {
       y = "Soft label value",
       color = "Condition"
     )
+}
 ```
 
 Soft labels can reveal:

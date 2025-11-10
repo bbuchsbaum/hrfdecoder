@@ -1,0 +1,364 @@
+---
+title: Integrating with rMVPA workflows
+name: rmvpa-integration
+description: Run searchlight analysis and cross-validation using the rMVPA framework.
+output:
+  rmarkdown::html_vignette:
+    toc: yes
+    toc_depth: 2
+params:
+  family: lapis
+  base_size: 13
+  content_width: 80
+css: albers.css
+vignette: '%\VignetteIndexEntry{Integrating with rMVPA workflows} %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}'
+includes:
+  in_header: |-
+    <script>document.addEventListener('DOMContentLoaded',()=>document.body.classList.add('palette-red'));</script>
+    <script src="albers.js"></script>
+resource_files:
+- albers.css
+- albers.js
+
+---
+
+```{r setup, include=FALSE}
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>",
+  fig.align = "center",
+  fig.retina = 2,
+  out.width = "100%",
+  message = FALSE,
+  warning = FALSE,
+  fig.width = 7,
+  fig.asp = 0.618
+)
+set.seed(123)
+options(pillar.sigfig = 7, width = 80)
+
+library(ggplot2)
+if (requireNamespace("albersdown", quietly = TRUE)) {
+      ggplot2::theme_set(albersdown::theme_albers(params$family, base_size = params$base_size))
+} else {
+      ggplot2::theme_set(hrfdecode::theme_albers(base_family = params$family, base_size = params$base_size))
+}
+```
+
+## Goal {#goal}
+
+Learn how to integrate `hrfdecode` with the `rMVPA` package for whole-brain searchlight analysis and cross-validation.
+
+## TL;DR {#tldr}
+
+```{r tldr, eval=FALSE}
+library(hrfdecode)
+library(rMVPA)
+library(fmridesign)
+library(fmrihrf)
+
+# Build event_model and design using helper
+sframe <- fmrihrf::sampling_frame(TR = 2, blocklens = c(200, 200))
+ev_model <- fmridesign::event_model(
+  onset ~ fmridesign::hrf(condition, basis = "spmg1"),
+  data = events,
+  block = ~ run,
+  sampling_frame = sframe
+)
+block_ids <- rep(1:2, each = 200)
+design <- hrfdecode::continuous_mvpa_design(
+  event_model = ev_model,
+  block_var = block_ids,
+  design_df_events = events
+)
+
+# Create hrfdecoder model specification
+model <- hrfdecoder_model(
+  design = design,
+  lambda_W = 0.1,
+  ar_order = 1
+)
+
+# Run searchlight with cross-validation
+result <- run_searchlight(
+  model_spec = model,
+  radius = 8,
+  method = "randomized"
+)
+```
+
+## Background {#background}
+
+The `rMVPA` package provides a framework for:
+
+- **Searchlight analysis** — sliding-window decoding across the brain
+- **ROI-based analysis** — regional classification
+- **Cross-validation** — train/test splits with multiple folds
+
+Traditional rMVPA workflows require **trial-averaged data** and **explicit labels**. The `hrfdecode` integration enables **continuous MVPA**: decoding directly from time series using weakly supervised learning.
+
+### Key differences {#key-differences}
+
+| Aspect | Traditional rMVPA | hrfdecoder + rMVPA |
+|--------|-------------------|---------------------|
+| **Input data** | Trial-averaged beta maps | Continuous fMRI time series |
+| **Labels** | Explicit trial labels | Event onsets + conditions |
+| **Temporal structure** | Ignored (trials independent) | Modeled via HRF + soft labels |
+| **Cross-validation** | Across trials | Across runs |
+
+## Setup {#setup}
+
+```{r load-libs}
+library(hrfdecode)
+library(fmridesign)
+# library(rMVPA)  # Load if available
+```
+
+## Creating a continuous design {#continuous-design}
+
+The `continuous_mvpa_design()` function wraps `fmridesign::event_model()` to create an rMVPA-compatible design object.
+
+```{r create-design}
+# Example event table (multi-run experiment)
+n_trials_per_run <- 20
+tr <- 2
+n_trs_per_run <- 200
+
+event_table <- data.frame(
+  onset = c(
+    seq(10, (n_trs_per_run - 10) * tr, length.out = n_trials_per_run),
+    seq(10, (n_trs_per_run - 10) * tr, length.out = n_trials_per_run)
+  ),
+  condition = rep(c("face", "scene"), n_trials_per_run),
+  duration = 1,
+  run = rep(1:2, each = n_trials_per_run)
+)
+
+head(event_table, 3)
+```
+
+Create the continuous design:
+
+```{r continuous-mvpa-design}
+# Build sampling frame and event_model for two runs
+sframe <- fmrihrf::sampling_frame(TR = tr, blocklens = c(n_trs_per_run, n_trs_per_run))
+ev_model <- fmridesign::event_model(
+  onset ~ fmridesign::hrf(condition, basis = "spmg1"),
+  data = event_table,
+  block = ~ run,
+  sampling_frame = sframe
+)
+
+# Block/run ids per TR (length equals total TRs across runs)
+block_ids <- rep(1:2, each = n_trs_per_run)
+
+# Create hrfdecoder design via helper
+design <- hrfdecode::continuous_mvpa_design(
+  event_model = ev_model,
+  block_var = block_ids,
+  design_df_events = event_table
+)
+
+# Inspect design object
+class(design)
+```
+
+The design contains:
+
+- `event_model`: `fmridesign` event model with HRF basis
+- `baseline_model`: Nuisance/baseline regressor model
+- `block_var`: Blocking structure for cross-validation (e.g., runs)
+
+## Creating an hrfdecoder model {#hrfdecoder-model}
+
+Use `hrfdecoder_model()` to create an rMVPA-compatible model specification.
+
+```{r model-spec}
+model <- hrfdecoder_model(
+  design = design,
+  lambda_W = 0.1,      # Ridge penalty on decoder weights
+  lambda_HRF = 0.01,   # Prior adherence to HRF basis
+  ar_order = 1,        # AR(1) prewhitening
+  max_iter = 10        # ALS iterations
+)
+
+class(model)
+```
+
+This model specification implements the rMVPA interface:
+
+- `train_model()`: Fit decoder on training fold
+- `predict()`: Apply decoder to test fold (now using `format_result()`)
+- `merge_results()`: Combine cross-validation results
+
+## Cross-validation structure {#cross-validation}
+
+With continuous data, **cross-validation happens across runs**, not trials. Each fold:
+
+1. **Training**: All runs except one
+2. **Testing**: Held-out run
+
+This respects temporal dependencies within runs while providing independent test sets.
+
+```{r cv-structure-diagram, eval=FALSE}
+# Conceptual fold structure for 3 runs:
+# Fold 1: Train on runs 2,3 | Test on run 1
+# Fold 2: Train on runs 1,3 | Test on run 2
+# Fold 3: Train on runs 1,2 | Test on run 3
+```
+
+## Running searchlight analysis {#searchlight}
+
+> **Note**: The following examples are conceptual. Full searchlight integration requires an `rMVPA` installation and appropriate data structures.
+
+```{r searchlight-example, eval=FALSE}
+library(rMVPA)
+
+# Prepare 4D fMRI dataset (X × Y × Z × T)
+# Assume fmri_4d is a neuroim2::NeuroVec object
+# fmri_4d <- neuroim2::read_vec("func_data.nii.gz")
+
+# Run searchlight
+result <- run_searchlight(
+  model_spec = model,
+  dataset = fmri_4d,
+  radius = 8,          # 8mm searchlight sphere
+  method = "randomized",
+  niter = 4            # Iterations for randomized searchlight
+)
+
+# Extract performance map
+perf_map <- result$performance
+
+# Threshold at accuracy > 60%
+sig_map <- perf_map > 0.60
+```
+
+### Searchlight workflow {#searchlight-workflow}
+
+For each searchlight sphere:
+
+1. **Extract voxel time series** within radius
+2. **Fit hrfdecoder** using `train_model()` on training folds
+3. **Predict** on test fold using learned decoder, HRF, AR
+4. **Aggregate predictions** to trial level
+5. **Compute accuracy** (or other metric)
+6. **Assign performance** to center voxel
+
+The result is a whole-brain performance map showing where decoding succeeds.
+
+## ROI-based analysis {#roi-analysis}
+
+For hypothesis-driven analyses, use predefined ROIs instead of searchlight.
+
+```{r roi-example, eval=FALSE}
+# Define ROI mask (e.g., fusiform face area)
+# roi_mask <- neuroim2::read_vol("ffa_mask.nii.gz")
+
+# Extract ROI time series
+# Y_roi <- extract_roi_timeseries(fmri_4d, roi_mask)
+
+# Fit decoder on ROI
+fit_roi <- fit_hrfdecoder(
+  Y = Y_roi,
+  event_model = design$event_model,
+  baseline_model = design$baseline_model,
+  lambda_W = 0.1,
+  ar_order = 1
+)
+
+# Cross-validate manually
+# (or use rMVPA::crossval_* functions with hrfdecoder_model)
+```
+
+## Merging fold results {#merge-results}
+
+After cross-validation, results from each fold need to be combined.
+
+```{r merge-example, eval=FALSE}
+# Conceptual: After running cross-validation
+# fold_results <- list(fold1_pred, fold2_pred, fold3_pred)
+
+# Merge using hrfdecoder's merge method
+# merged <- merge_results(model, fold_results)
+
+# Compute overall accuracy
+# overall_acc <- mean(merged$predictions == merged$true_labels)
+```
+
+The `merge_results()` method concatenates predictions across folds, respecting the temporal structure of test sets.
+
+## Handling multi-run data {#multi-run}
+
+Multi-run experiments require careful handling:
+
+1. **Event table**: Include `run` column
+2. **Blocklens**: Specify TR counts per run
+3. **Baseline model**: Separate baseline per run
+4. **AR parameters**: Optionally pool per run (if implemented)
+
+```{r multi-run-design}
+# Already created above with run column
+str(event_table)
+
+# Blocklens match number of runs
+blocklens <- c(n_trs_per_run, n_trs_per_run)
+
+# Design respects run structure
+# Design respects run structure (via rMVPA helper)
+sframe_multi <- fmrihrf::sampling_frame(TR = tr, blocklens = blocklens)
+ev_model_multi <- fmridesign::event_model(
+  onset ~ fmridesign::hrf(condition, basis = "spmg1"),
+  data = event_table,
+  block = ~ run,
+  sampling_frame = sframe_multi
+)
+block_ids_multi <- rep(1:2, each = n_trs_per_run)
+design_multi <- hrfdecode::continuous_mvpa_design(
+  event_model = ev_model_multi,
+  block_var = block_ids_multi,
+  design_df_events = event_table
+)
+```
+
+## Interpreting results {#interpretation}
+
+Searchlight and ROI results provide different insights:
+
+### Searchlight maps {#searchlight-interpretation}
+
+- **High accuracy regions**: Information-bearing areas
+- **Cluster extent**: Spatial distribution of coding
+- **Peak locations**: Anatomical specificity
+
+### ROI performance {#roi-interpretation}
+
+- **Above-chance accuracy**: Evidence for information coding
+- **Comparison across ROIs**: Selectivity and specificity
+- **Temporal dynamics**: Via TR-level predictions
+
+## Practical tips {#tips}
+
+1. **Start with ROIs**: Test decoder on known regions before whole-brain
+2. **Check convergence**: Monitor ALS iterations (`verbose = TRUE`)
+3. **Tune regularization**: Cross-validate `lambda_W` and `lambda_HRF`
+4. **Verify predictions**: Inspect `y_soft` and `theta` for sanity
+5. **Use parallel processing**: rMVPA supports parallel searchlight
+
+## Next steps {#next-steps}
+
+- [Getting Started](01-getting-started.html) — Basic decoder fitting
+- [AR Prewhitening](02-ar-prewhitening.html) — Temporal autocorrelation correction
+- [HRF Estimation](04-hrf-estimation.html) — Understanding joint HRF learning
+- [Weakly Supervised Learning](05-weakly-supervised.html) — Algorithm details
+
+## Session info {#session-info}
+
+```{r session-info}
+sessioninfo::session_info(pkgs = "hrfdecode")
+```

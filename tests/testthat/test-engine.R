@@ -578,7 +578,7 @@ test_that("Predict path returns valid probabilities and aggregates correctly", {
     max_iter = 4, tol = 1e-6, nonneg = TRUE,
     background = TRUE, standardize = TRUE, verbose = 0
   )
-  tr_out <- predict_hrfdecoder(fit, Y_test = Y, mode = "tr")
+  tr_out <- predict(fit, newdata = Y, mode = "tr")
   rs <- rowSums(tr_out)
   if (max(abs(rs - 1)) < 0.1) {
     expect_true(all(abs(rs - 1) < 1e-6))

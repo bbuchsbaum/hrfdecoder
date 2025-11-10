@@ -1,8 +1,17 @@
+#' Convert to rMVPA dataset
+#'
+#' Generic function to convert various fMRI data objects to rMVPA's mvpa_dataset format
+#'
+#' @param x object to convert (e.g., fmri_dataset)
+#' @param ... additional arguments passed to methods
+#' @return an mvpa_dataset object
 #' @export
 as_mvpa_dataset <- function(x, ...) {
   UseMethod("as_mvpa_dataset")
 }
 
+#' @describeIn as_mvpa_dataset Convert fmri_dataset to mvpa_dataset
+#' @param mask optional mask to use (defaults to x$mask)
 #' @export
 as_mvpa_dataset.fmri_dataset <- function(x, mask = NULL, ...) {
   mask <- mask %||% x$mask

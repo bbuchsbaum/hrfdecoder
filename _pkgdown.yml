@@ -1,12 +1,26 @@
-url: ~
+url: https://bbuchsbaum.github.io/hrfdecoder
 template:
   package: albersdown
   bootstrap: 5
-
+  includes:
+    in_header: |
+      <script>document.addEventListener('DOMContentLoaded', function(){ document.body.classList.add('palette-red'); });</script>
+      <style>
+        body.palette-red { --albers-accent: #d61f1f; --albers-link: #d61f1f; }
+        .navbar-nav .nav-link { line-height: 1.25; padding-top: 0.5rem; padding-bottom: 0.5rem; }
+      </style>
+  assets: inst/pkgdown/albers.css
 navbar:
   structure:
-    left: [intro, reference, articles, tutorials, news]
-    right: [search, github]
+    left:
+    - intro
+    - reference
+    - articles
+    - tutorials
+    - news
+    right:
+    - search
+    - github
   components:
     articles:
       text: Articles
@@ -14,48 +28,44 @@ navbar:
       - text: Tutorials
       - text: Getting started
         href: articles/01-getting-started.html
-      - text: -------
+      - text: '-------'
       - text: How-tos
       - text: AR prewhitening
         href: articles/02-ar-prewhitening.html
       - text: rMVPA integration
         href: articles/03-rmvpa-integration.html
-      - text: -------
+      - text: '-------'
       - text: Explanations
       - text: HRF estimation
         href: articles/04-hrf-estimation.html
       - text: Weakly supervised learning
         href: articles/05-weakly-supervised.html
-
 articles:
 - title: Tutorials
-  desc: >
-    Start here for a guided introduction to hrfdecoder. These tutorials walk you
-    through the core workflow step by step.
-  contents:
-  - 01-getting-started
-
+  desc: |
+    Start here for a guided introduction to hrfdecoder. These tutorials walk you through the core workflow step by step.
+  contents: 01-getting-started
 - title: How-tos
-  desc: >
-    Task-oriented recipes for specific use cases. Each guide focuses on solving
-    one particular problem.
+  desc: |
+    Task-oriented recipes for specific use cases. Each guide focuses on solving one particular problem.
   contents:
   - 02-ar-prewhitening
   - 03-rmvpa-integration
-
 - title: Explanations
-  desc: >
-    Conceptual deep dives into how hrfdecoder works. Learn about the algorithms,
-    design decisions, and theoretical foundations.
+  desc: |
+    Conceptual deep dives into how hrfdecoder works. Learn about the algorithms, design decisions, and theoretical foundations.
   contents:
   - 04-hrf-estimation
   - 05-weakly-supervised
-
+  - 06-performance-metrics
 home:
   title: hrfdecode • HRF-Aware Weakly Supervised MVPA Decoder
-  description: >
-    Jointly estimate soft labels, HRF parameters, and multivariate decoders
-    directly from fMRI time series and event models.
-
+  description: |
+    Jointly estimate soft labels, HRF parameters, and multivariate decoders directly from fMRI time series and event models.
+  links:
+    - text: Performance metrics
+      href: articles/06-performance-metrics.html
+    - text: Reference
+      href: reference/index.html
 development:
   mode: auto

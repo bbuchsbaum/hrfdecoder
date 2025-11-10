@@ -13,6 +13,11 @@ predict_hrfdecoder <- function(object, Y_test,
                                mode = c("tr", "trial"),
                                window = c(4, 8),
                                weights = c("hrf", "flat")) {
+  # Gentle deprecation notice; can be silenced via option
+  if (isTRUE(getOption("hrfdecode.deprecate.predict_hrfdecoder", TRUE))) {
+    .Deprecated("predict", package = "hrfdecode",
+                msg = "predict_hrfdecoder() is soft-deprecated; use predict(object, newdata = ..., ...) instead. Set options(hrfdecode.deprecate.predict_hrfdecoder = FALSE) to silence this message.")
+  }
   stopifnot(inherits(object, "hrfdecoder_fit"))
   stopifnot(is.matrix(Y_test))
   mode <- match.arg(mode)
@@ -63,6 +68,40 @@ predict_hrfdecoder <- function(object, Y_test,
   agg
 }
 
+#' Predict for hrfdecoder_fit objects
+#'
+#' S3 wrapper around `predict_hrfdecoder()` to integrate with base
+#' `predict()` workflows. This preserves return types and arguments used
+#' in `predict_hrfdecoder()` while exposing the conventional
+#' `predict(object, newdata, ...)` interface.
+#'
+#' @param object hrfdecoder_fit
+#' @param newdata numeric matrix (T x V)
+#' @param ev_model_test optional fmridesign::event_model for trial-level outputs
+#' @param mode "tr" or "trial"
+#' @param window time window (seconds) relative to onset for aggregation
+#' @param weights weighting scheme ("hrf" uses fitted HRF; "flat" uniform)
+#' @param ... unused
+#' @return Same as `predict_hrfdecoder()`
+#' @export
+predict.hrfdecoder_fit <- function(object, newdata,
+                                   ev_model_test = NULL,
+                                   mode = c("tr", "trial"),
+                                   window = c(4, 8),
+                                   weights = c("hrf", "flat"),
+                                   ...) {
+  if (missing(newdata)) stop("newdata must be supplied for predict().")
+  Y_test <- as.matrix(newdata)
+  predict_hrfdecoder(
+    object = object,
+    Y_test = Y_test,
+    ev_model_test = ev_model_test,
+    mode = mode,
+    window = window,
+    weights = weights
+  )
+}
+
 #' Aggregate TR-level soft labels to events
 #' @param P matrix (T x K_event)
 #' @param events event data.frame (needs columns onset, condition)
@@ -70,6 +109,7 @@ predict_hrfdecoder <- function(object, Y_test,
 #' @param conditions ordered condition labels
 #' @param window time window (s) after onset
 #' @param hrf optional fmrihrf HRF object for weighting
+#' @param normalize logical; if TRUE, normalize per-event probabilities to sum to 1 across conditions (default: FALSE)
 #' @return list with probs matrix and y_true factor
 #' @export
 aggregate_events <- function(P, events, TR, conditions,

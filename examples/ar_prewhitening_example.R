@@ -168,8 +168,8 @@ ev_model_test <- event_model(
 
 # Predict with AR prewhitening (automatically applied)
 cat("\nPredicting on test data (AR automatically applied)...\n")
-preds_tr <- predict_hrfdecoder(fit_ar, Y_test, mode = "tr")
-preds_trial <- predict_hrfdecoder(fit_ar, Y_test,
+preds_tr <- predict(fit_ar, newdata = Y_test, mode = "tr")
+preds_trial <- predict(fit_ar, newdata = Y_test,
                                   ev_model_test = ev_model_test,
                                   mode = "trial")
 

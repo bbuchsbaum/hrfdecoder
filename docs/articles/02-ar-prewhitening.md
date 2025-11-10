@@ -260,13 +260,13 @@ for (v in 1:n_voxels) {
     eps[t] <- phi_true * eps[t - 1] + rnorm(1)
   }
   Y_test[, v] <- eps + signal_conv * (v <= n_voxels / 2) * 0.5
-}
 
 # Predictions with AR(1) model
-pred_ar1 <- predict_hrfdecoder(fit_ar1, Y_test = Y_test, ev_model_test = ev_model, mode = "trial")
+}
+pred_ar1 <- predict(fit_ar1, newdata = Y_test, ev_model_test = ev_model, mode = "trial")
 
 # Predictions without AR
-pred_none <- predict_hrfdecoder(fit_none, Y_test = Y_test, ev_model_test = ev_model, mode = "trial")
+pred_none <- predict(fit_none, newdata = Y_test, ev_model_test = ev_model, mode = "trial")
 
 # Compare accuracy
 true_labels <- ifelse(conditions == "A", 1, -1)
@@ -300,7 +300,7 @@ if (requireNamespace("ggplot2", quietly = TRUE)) {
     geom_point(alpha = 0.7, size = 2) +
     geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
     facet_wrap(~ method, ncol = 1) +
-    hrfdecode::scale_color_albers() +
+    (if (requireNamespace("albersdown", quietly = TRUE)) albersdown::scale_color_albers(params$family) else ggplot2::scale_color_discrete()) +
     labs(
       title = "Effect of AR prewhitening on predictions",
       subtitle = "AR(1) correction improves signal-to-noise ratio",
@@ -335,13 +335,18 @@ correction reduces noise and improves separation.
 
 ## Next steps
 
-- [Getting Started](01-getting-started.md) — Basic decoder fitting
-  workflow
-- [rMVPA Integration](03-rmvpa-integration.md) — Cross-validation with
-  searchlight analysis
-- [HRF Estimation](04-hrf-estimation.md) — Joint HRF learning
-- [Weakly Supervised Learning](05-weakly-supervised.md) — Algorithm
-  internals
+- [Getting
+  Started](https://bbuchsbaum.github.io/hrfdecoder/articles/01-getting-started.md)
+  — Basic decoder fitting workflow
+- [rMVPA
+  Integration](https://bbuchsbaum.github.io/hrfdecoder/articles/03-rmvpa-integration.md)
+  — Cross-validation with searchlight analysis
+- [HRF
+  Estimation](https://bbuchsbaum.github.io/hrfdecoder/articles/04-hrf-estimation.md)
+  — Joint HRF learning
+- [Weakly Supervised
+  Learning](https://bbuchsbaum.github.io/hrfdecoder/articles/05-weakly-supervised.md)
+  — Algorithm internals
 
 ## Session info
 
@@ -357,7 +362,7 @@ sessioninfo::session_info(pkgs = "hrfdecode")
 #>  collate  en_US.UTF-8
 #>  ctype    en_US.UTF-8
 #>  tz       America/Toronto
-#>  date     2025-11-09
+#>  date     2025-11-10
 #>  pandoc   3.7.0.2 @ /opt/homebrew/bin/ (via rmarkdown)
 #>  quarto   1.7.32 @ /usr/local/bin/quarto
 #> 
@@ -405,7 +410,7 @@ sessioninfo::session_info(pkgs = "hrfdecode")
 #>  filenamer        0.3        2025-04-09 [2] CRAN (R 4.5.0)
 #>  flock            0.7        2016-11-12 [2] CRAN (R 4.5.0)
 #>  fmriAR           0.1.0      2025-10-18 [2] Github (bbuchsbaum/fmriAR@0b10352)
-#>  fmridesign     * 0.5.0      2025-11-09 [2] Github (bbuchsbaum/fmridesign@f1462eb)
+#>  fmridesign     * 0.5.0      2025-11-10 [2] Github (bbuchsbaum/fmridesign@9af622f)
 #>  fmrihrf          0.1.0.9000 2025-11-01 [2] Github (bbuchsbaum/fmrihrf@708058f)
 #>  FNN              1.1.4.1    2024-09-22 [2] CRAN (R 4.5.0)
 #>  fontawesome      0.5.3      2024-11-16 [2] CRAN (R 4.5.0)
@@ -429,7 +434,7 @@ sessioninfo::session_info(pkgs = "hrfdecode")
 #>  hardhat          1.4.2      2025-08-20 [2] CRAN (R 4.5.0)
 #>  highr            0.11       2024-05-26 [2] CRAN (R 4.5.0)
 #>  hms              1.1.4      2025-10-17 [2] CRAN (R 4.5.0)
-#>  hrfdecode      * 0.2.0      2025-11-09 [1] local
+#>  hrfdecode      * 0.2.0      2025-11-10 [1] local
 #>  htmltools        0.5.8.1    2024-04-04 [2] CRAN (R 4.5.0)
 #>  htmlwidgets      1.6.4      2023-12-06 [2] CRAN (R 4.5.0)
 #>  httr             1.4.7      2023-08-15 [2] CRAN (R 4.5.0)
@@ -492,7 +497,7 @@ sessioninfo::session_info(pkgs = "hrfdecode")
 #>  rlang            1.1.6      2025-04-11 [2] CRAN (R 4.5.0)
 #>  rmarkdown        2.30       2025-09-28 [2] CRAN (R 4.5.0)
 #>  rmio             0.4.0      2022-02-17 [2] CRAN (R 4.5.0)
-#>  rMVPA            0.1.2      2025-11-09 [2] local
+#>  rMVPA            0.1.2      2025-11-10 [2] Github (bbuchsbaum/rMVPA@8858610)
 #>  RNifti           1.8.0      2025-02-22 [2] CRAN (R 4.5.0)
 #>  RNiftyReg        2.8.4      2024-09-30 [2] CRAN (R 4.5.0)
 #>  robustbase       0.99-6     2025-09-04 [2] CRAN (R 4.5.0)
@@ -528,7 +533,7 @@ sessioninfo::session_info(pkgs = "hrfdecode")
 #>  yaml             2.3.10     2024-07-26 [2] CRAN (R 4.5.0)
 #>  yardstick        1.3.2      2025-01-22 [2] CRAN (R 4.5.0)
 #> 
-#>  [1] /private/var/folders/9h/nkjq6vss7mqdl4ck7q1hd8ph0000gp/T/RtmpfzOoi1/temp_libpathe6e4ebda2ae
+#>  [1] /private/var/folders/9h/nkjq6vss7mqdl4ck7q1hd8ph0000gp/T/RtmpsnT3u0/temp_libpathad1faeea7f2
 #>  [2] /Users/bbuchsbaum/Library/R/arm64/4.5/library
 #>  [3] /Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/library
 #>  * ── Packages attached to the search path.

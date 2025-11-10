@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+
+
+<title>Weakly supervised learning for fMRI</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Weakly supervised learning for fMRI</h1>
+
+
+
+<div id="goal" class="section level2">
+<h2>Goal</h2>
+<p>Understand the weakly supervised learning framework underlying
+<code>hrfdecode</code>, including the alternating least squares
+algorithm, regularization parameters, and convergence diagnostics.</p>
+</div>
+<div id="tldr" class="section level2">
+<h2>TL;DR</h2>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">library</span>(hrfdecode)</span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a><span class="co"># Fit with custom regularization</span></span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a>fit <span class="ot">&lt;-</span> <span class="fu">fit_hrfdecoder</span>(</span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a>  <span class="at">Y =</span> fmri_data,</span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a>  <span class="at">ev_model =</span> ev_model,</span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a>  <span class="at">base_model =</span> bl_model,</span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a>  <span class="at">lambda_W =</span> <span class="fl">0.5</span>,        <span class="co"># Ridge penalty on decoder weights</span></span>
+<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a>  <span class="at">lambda_HRF =</span> <span class="fl">0.01</span>,     <span class="co"># HRF prior strength</span></span>
+<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a>  <span class="at">lambda_smooth =</span> <span class="fl">0.1</span>,   <span class="co"># Temporal smoothness on soft labels</span></span>
+<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a>  <span class="at">theta_penalty =</span> <span class="fl">0.01</span>,  <span class="co"># HRF coefficient L2 penalty</span></span>
+<span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a>  <span class="at">max_iter =</span> <span class="dv">20</span>,         <span class="co"># Maximum ALS iterations</span></span>
+<span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a>  <span class="at">tol =</span> <span class="fl">1e-4</span>,            <span class="co"># Convergence tolerance</span></span>
+<span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a>  <span class="at">verbose =</span> <span class="cn">TRUE</span>         <span class="co"># Show iteration progress</span></span>
+<span id="cb1-15"><a href="#cb1-15" tabindex="-1"></a>)</span>
+<span id="cb1-16"><a href="#cb1-16" tabindex="-1"></a></span>
+<span id="cb1-17"><a href="#cb1-17" tabindex="-1"></a><span class="co"># Inspect convergence</span></span>
+<span id="cb1-18"><a href="#cb1-18" tabindex="-1"></a>fit<span class="sc">$</span>convergence</span></code></pre></div>
+</div>
+<div id="weakly-supervised" class="section level2">
+<h2>What is weakly supervised learning?</h2>
+<p>Traditional supervised learning requires <strong>strong
+labels</strong>: explicit trial-level class assignments. For fMRI, this
+means:</p>
+<ul>
+<li>Averaging BOLD across trial duration</li>
+<li>Assigning discrete labels (e.g., “face” vs. “scene”)</li>
+<li>Training classifier on (averaged data, labels) pairs</li>
+</ul>
+<p><strong>Weakly supervised learning</strong> relaxes this requirement.
+Instead of trial labels, we provide:</p>
+<ul>
+<li><strong>Event onsets</strong>: When stimuli occurred</li>
+<li><strong>Condition labels</strong>: What type of stimulus (but not
+trial outcome)</li>
+<li><strong>Continuous time series</strong>: Full BOLD data, not trial
+averages</li>
+</ul>
+<p>The algorithm then <strong>jointly infers</strong>:</p>
+<ol style="list-style-type: decimal">
+<li><strong>Soft labels</strong> (y): Continuous trial predictions</li>
+<li><strong>HRF</strong> (θ): Hemodynamic response parameters</li>
+<li><strong>Decoder</strong> (W): Voxel weights</li>
+</ol>
+<p>This is “weak” supervision because we don’t specify the trial-level
+BOLD patterns—only the experimental structure.</p>
+</div>
+<div id="als-algorithm" class="section level2">
+<h2>The alternating least squares algorithm</h2>
+<p>The optimization problem is:</p>
+<p><span class="math display">\[
+\min_{y, \theta, W} \| Y - X(\theta) y W^T \|^2 + \lambda_W \|W\|^2 +
+\lambda_{HRF} \|\theta - \theta_0\|^2 + \lambda_{smooth} \|Ly\|^2
+\]</span></p>
+<p>Where:</p>
+<ul>
+<li><strong>Y</strong>: fMRI data (T × V)</li>
+<li><strong>X(θ)</strong>: Design matrix convolved with HRF(θ)</li>
+<li><strong>y</strong>: Soft labels (N × 1)</li>
+<li><strong>W</strong>: Decoder weights (V × 1)</li>
+<li><strong>L</strong>: Laplacian for temporal smoothness</li>
+</ul>
+<p>This is <strong>non-convex</strong> in (y, θ, W) jointly, but
+<strong>convex in each variable</strong> when others are fixed. ALS
+exploits this:</p>
+<div id="als-steps" class="section level3">
+<h3>ALS steps</h3>
+<pre><code>Initialize: y₀, θ₀, W₀
+For iteration t = 1, 2, ..., max_iter:
+
+  1. Update soft labels:
+     y_t = argmin_y || Y - X(θ_{t-1}) y W_{t-1}^T ||^2 + λ_smooth ||Ly||^2
+
+  2. Update HRF:
+     θ_t = argmin_θ || Y - X(θ) y_t W_{t-1}^T ||^2 + λ_HRF ||θ - θ₀||^2
+
+  3. Update decoder:
+     W_t = argmin_W || Y - X(θ_t) y_t W^T ||^2 + λ_W ||W||^2
+
+  If || (y_t, θ_t, W_t) - (y_{t-1}, θ_{t-1}, W_{t-1}) || &lt; tol:
+    Break (converged)</code></pre>
+<p>Each step is a <strong>regularized least squares</strong> problem
+with closed-form solution.</p>
+</div>
+</div>
+<div id="regularization" class="section level2">
+<h2>Regularization parameters</h2>
+<p>Four main parameters control the optimization:</p>
+<div id="lambda-w" class="section level3">
+<h3>lambda_W: Decoder ridge penalty</h3>
+<p>Controls decoder complexity via L2 penalty on weights.</p>
+<ul>
+<li><strong>Low (0.01)</strong>: Complex decoder, risk of
+overfitting</li>
+<li><strong>Medium (0.1)</strong>: Default, good balance</li>
+<li><strong>High (1.0)</strong>: Simple decoder, risk of
+underfitting</li>
+</ul>
+<p><strong>When to increase</strong>: Many voxels, low SNR, small sample
+<strong>When to decrease</strong>: Few voxels, high SNR, large
+sample</p>
+</div>
+<div id="lambda-hrf" class="section level3">
+<h3>lambda_HRF: HRF prior strength</h3>
+<p>Pulls HRF toward canonical shape.</p>
+<ul>
+<li><strong>Low (0.001)</strong>: Data-driven HRF, high flexibility</li>
+<li><strong>Medium (0.01)</strong>: Default, gentle regularization</li>
+<li><strong>High (1.0)</strong>: Nearly fixed canonical HRF</li>
+</ul>
+<p><strong>When to increase</strong>: Uncertain HRF, low SNR, standard
+populations <strong>When to decrease</strong>: Known HRF deviation, high
+SNR, atypical populations</p>
+</div>
+<div id="lambda-smooth" class="section level3">
+<h3>lambda_smooth: Soft label smoothness</h3>
+<p>Encourages temporal smoothness in soft labels across trials.</p>
+<ul>
+<li><strong>Low (0)</strong>: Independent trial labels</li>
+<li><strong>Medium (0.1)</strong>: Gentle smoothing</li>
+<li><strong>High (1.0)</strong>: Strong smoothness (assumes slow label
+drift)</li>
+</ul>
+<p><strong>When to increase</strong>: Blocked designs, gradual condition
+changes <strong>When to decrease</strong>: Event-related designs, rapid
+switching</p>
+</div>
+<div id="theta-penalty" class="section level3">
+<h3>theta_penalty: HRF coefficient penalty</h3>
+<p>Additional L2 penalty on HRF basis coefficients (beyond prior).</p>
+<ul>
+<li><strong>Default (0.01)</strong>: Light regularization</li>
+<li>Can prevent extreme HRF shapes</li>
+</ul>
+</div>
+</div>
+<div id="parameter-tuning" class="section level2">
+<h2>Practical parameter tuning</h2>
+<div id="grid-search" class="section level3">
+<h3>Strategy 1: Grid search</h3>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="co"># Setup (assuming data and models are defined)</span></span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a><span class="fu">library</span>(hrfdecode)</span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a><span class="co"># Parameter grid</span></span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a>lambda_W_values <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="fl">0.01</span>, <span class="fl">0.1</span>, <span class="fl">0.5</span>, <span class="fl">1.0</span>)</span>
+<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a>results <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a></span>
+<span id="cb3-8"><a href="#cb3-8" tabindex="-1"></a><span class="cf">for</span> (i <span class="cf">in</span> <span class="fu">seq_along</span>(lambda_W_values)) {</span>
+<span id="cb3-9"><a href="#cb3-9" tabindex="-1"></a>  fit <span class="ot">&lt;-</span> <span class="fu">fit_hrfdecoder</span>(</span>
+<span id="cb3-10"><a href="#cb3-10" tabindex="-1"></a>    <span class="at">Y =</span> Y_train,</span>
+<span id="cb3-11"><a href="#cb3-11" tabindex="-1"></a>    <span class="at">ev_model =</span> ev_model,</span>
+<span id="cb3-12"><a href="#cb3-12" tabindex="-1"></a>    <span class="at">base_model =</span> bl_model,</span>
+<span id="cb3-13"><a href="#cb3-13" tabindex="-1"></a>    <span class="at">lambda_W =</span> lambda_W_values[i],</span>
+<span id="cb3-14"><a href="#cb3-14" tabindex="-1"></a>    <span class="at">verbose =</span> <span class="cn">FALSE</span></span>
+<span id="cb3-15"><a href="#cb3-15" tabindex="-1"></a>  )</span>
+<span id="cb3-16"><a href="#cb3-16" tabindex="-1"></a></span>
+<span id="cb3-17"><a href="#cb3-17" tabindex="-1"></a>  <span class="co"># Evaluate on validation set</span></span>
+<span id="cb3-18"><a href="#cb3-18" tabindex="-1"></a>  preds <span class="ot">&lt;-</span> <span class="fu">predict</span>(fit, <span class="at">newdata =</span> Y_val, <span class="at">mode =</span> <span class="st">&quot;trial&quot;</span>)</span>
+<span id="cb3-19"><a href="#cb3-19" tabindex="-1"></a>  acc <span class="ot">&lt;-</span> <span class="fu">mean</span>(<span class="fu">sign</span>(preds) <span class="sc">==</span> true_labels_val)</span>
+<span id="cb3-20"><a href="#cb3-20" tabindex="-1"></a></span>
+<span id="cb3-21"><a href="#cb3-21" tabindex="-1"></a>  results[[i]] <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="at">lambda_W =</span> lambda_W_values[i], <span class="at">accuracy =</span> acc)</span>
+<span id="cb3-22"><a href="#cb3-22" tabindex="-1"></a></span>
+<span id="cb3-23"><a href="#cb3-23" tabindex="-1"></a><span class="co"># Select best</span></span>
+<span id="cb3-24"><a href="#cb3-24" tabindex="-1"></a>best_idx <span class="ot">&lt;-</span> <span class="fu">which.max</span>(<span class="fu">sapply</span>(results, <span class="cf">function</span>(x) x<span class="sc">$</span>accuracy))</span>
+<span id="cb3-25"><a href="#cb3-25" tabindex="-1"></a>best_lambda_W <span class="ot">&lt;-</span> results[[best_idx]]<span class="sc">$</span>lambda_W</span></code></pre></div>
+</div>
+<div id="cross-validation" class="section level3">
+<h3>Strategy 2: Cross-validation</h3>
+<p>Integrate with rMVPA for automatic parameter selection:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="fu">library</span>(rMVPA)</span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a></span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a><span class="co"># Define parameter grid</span></span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a>param_grid <span class="ot">&lt;-</span> <span class="fu">expand.grid</span>(</span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a>  <span class="at">lambda_W =</span> <span class="fu">c</span>(<span class="fl">0.1</span>, <span class="fl">0.5</span>, <span class="fl">1.0</span>),</span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a>  <span class="at">lambda_HRF =</span> <span class="fu">c</span>(<span class="fl">0.001</span>, <span class="fl">0.01</span>, <span class="fl">0.1</span>)</span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a>)</span>
+<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a></span>
+<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a><span class="co"># Cross-validate each combination</span></span>
+<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a><span class="co"># (Conceptual; requires rMVPA infrastructure)</span></span>
+<span id="cb4-11"><a href="#cb4-11" tabindex="-1"></a><span class="co"># cv_results &lt;- tune_parameters(hrfdecoder_model, param_grid, cv_folds = 5)</span></span></code></pre></div>
+</div>
+<div id="heuristics" class="section level3">
+<h3>Strategy 3: Heuristics</h3>
+<p>Rule-of-thumb starting points:</p>
+<ul>
+<li><strong>lambda_W</strong>: 0.1 × (number of voxels / number of
+trials)</li>
+<li><strong>lambda_HRF</strong>: 0.01 (rarely needs tuning)</li>
+<li><strong>lambda_smooth</strong>: 0 for event-related, 0.1-0.5 for
+block designs</li>
+<li><strong>theta_penalty</strong>: 0.01 (fixed)</li>
+</ul>
+</div>
+</div>
+<div id="convergence" class="section level2">
+<h2>Convergence diagnostics</h2>
+<p>Monitor convergence to ensure optimization succeeded.</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="fu">library</span>(hrfdecode)</span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="fu">library</span>(fmridesign)</span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a><span class="co"># Simple simulation</span></span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a>n_trs <span class="ot">&lt;-</span> <span class="dv">150</span></span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a>n_voxels <span class="ot">&lt;-</span> <span class="dv">30</span></span>
+<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a>n_trials <span class="ot">&lt;-</span> <span class="dv">30</span></span>
+<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a>tr <span class="ot">&lt;-</span> <span class="dv">2</span></span>
+<span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a></span>
+<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a>onsets <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="dv">10</span>, n_trs <span class="sc">*</span> tr <span class="sc">-</span> <span class="dv">20</span>, <span class="at">length.out =</span> n_trials)</span>
+<span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a>conditions <span class="ot">&lt;-</span> <span class="fu">rep</span>(<span class="fu">c</span>(<span class="st">&quot;A&quot;</span>, <span class="st">&quot;B&quot;</span>), <span class="at">each =</span> n_trials <span class="sc">/</span> <span class="dv">2</span>)</span>
+<span id="cb5-12"><a href="#cb5-12" tabindex="-1"></a>event_table <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">onset =</span> onsets, <span class="at">condition =</span> conditions, <span class="at">duration =</span> <span class="dv">1</span>)</span>
+<span id="cb5-13"><a href="#cb5-13" tabindex="-1"></a></span>
+<span id="cb5-14"><a href="#cb5-14" tabindex="-1"></a>  ev_model <span class="ot">&lt;-</span> <span class="fu">event_model</span>(</span>
+<span id="cb5-15"><a href="#cb5-15" tabindex="-1"></a>  onset <span class="sc">~</span> <span class="fu">hrf</span>(condition, <span class="at">basis =</span> <span class="st">&quot;spmg1&quot;</span>),</span>
+<span id="cb5-16"><a href="#cb5-16" tabindex="-1"></a>  <span class="at">data =</span> event_table,</span>
+<span id="cb5-17"><a href="#cb5-17" tabindex="-1"></a>  <span class="at">block =</span> <span class="sc">~</span> <span class="dv">1</span>,</span>
+<span id="cb5-18"><a href="#cb5-18" tabindex="-1"></a>  <span class="at">sampling_frame =</span> fmrihrf<span class="sc">::</span><span class="fu">sampling_frame</span>(<span class="at">TR =</span> tr, <span class="at">blocklens =</span> n_trs)</span>
+<span id="cb5-19"><a href="#cb5-19" tabindex="-1"></a>)</span>
+<span id="cb5-20"><a href="#cb5-20" tabindex="-1"></a>  bl_model <span class="ot">&lt;-</span> <span class="fu">baseline_model</span>(<span class="at">basis =</span> <span class="st">&quot;bs&quot;</span>, <span class="at">degree =</span> <span class="dv">3</span>,</span>
+<span id="cb5-21"><a href="#cb5-21" tabindex="-1"></a>                           <span class="at">sframe =</span> fmrihrf<span class="sc">::</span><span class="fu">sampling_frame</span>(<span class="at">TR =</span> tr, <span class="at">blocklens =</span> n_trs))</span>
+<span id="cb5-22"><a href="#cb5-22" tabindex="-1"></a></span>
+<span id="cb5-23"><a href="#cb5-23" tabindex="-1"></a><span class="co"># Simulate data</span></span>
+<span id="cb5-24"><a href="#cb5-24" tabindex="-1"></a>hrf_basis <span class="ot">&lt;-</span> fmrihrf<span class="sc">::</span><span class="fu">evaluate</span>(fmrihrf<span class="sc">::</span><span class="fu">getHRF</span>(<span class="st">&quot;spmg2&quot;</span>), <span class="fu">seq</span>(<span class="dv">0</span>, <span class="dv">24</span>, <span class="at">by =</span> tr))</span>
+<span id="cb5-25"><a href="#cb5-25" tabindex="-1"></a>hrf_vec <span class="ot">&lt;-</span> <span class="fu">as.numeric</span>(hrf_basis <span class="sc">%*%</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">0</span>))</span>
+<span id="cb5-26"><a href="#cb5-26" tabindex="-1"></a>stick_A <span class="ot">&lt;-</span> <span class="fu">rep</span>(<span class="dv">0</span>, n_trs); stick_B <span class="ot">&lt;-</span> <span class="fu">rep</span>(<span class="dv">0</span>, n_trs)</span>
+<span id="cb5-27"><a href="#cb5-27" tabindex="-1"></a>idx_A <span class="ot">&lt;-</span> <span class="fu">pmin</span>(n_trs, <span class="fu">pmax</span>(<span class="dv">1</span><span class="dt">L</span>, <span class="fu">floor</span>(event_table<span class="sc">$</span>onset[event_table<span class="sc">$</span>condition <span class="sc">==</span> <span class="st">&quot;A&quot;</span>] <span class="sc">/</span> tr) <span class="sc">+</span> <span class="dv">1</span><span class="dt">L</span>))</span>
+<span id="cb5-28"><a href="#cb5-28" tabindex="-1"></a>idx_B <span class="ot">&lt;-</span> <span class="fu">pmin</span>(n_trs, <span class="fu">pmax</span>(<span class="dv">1</span><span class="dt">L</span>, <span class="fu">floor</span>(event_table<span class="sc">$</span>onset[event_table<span class="sc">$</span>condition <span class="sc">==</span> <span class="st">&quot;B&quot;</span>] <span class="sc">/</span> tr) <span class="sc">+</span> <span class="dv">1</span><span class="dt">L</span>))</span>
+<span id="cb5-29"><a href="#cb5-29" tabindex="-1"></a>stick_A[idx_A] <span class="ot">&lt;-</span> <span class="dv">1</span>; stick_B[idx_B] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb5-30"><a href="#cb5-30" tabindex="-1"></a>signal <span class="ot">&lt;-</span> stick_A <span class="sc">-</span> stick_B</span>
+<span id="cb5-31"><a href="#cb5-31" tabindex="-1"></a>signal_conv <span class="ot">&lt;-</span> stats<span class="sc">::</span><span class="fu">convolve</span>(signal, <span class="fu">rev</span>(hrf_vec), <span class="at">type =</span> <span class="st">&quot;open&quot;</span>)[<span class="dv">1</span><span class="sc">:</span>n_trs]</span>
+<span id="cb5-32"><a href="#cb5-32" tabindex="-1"></a></span>
+<span id="cb5-33"><a href="#cb5-33" tabindex="-1"></a>Y_data <span class="ot">&lt;-</span> <span class="fu">matrix</span>(<span class="fu">rnorm</span>(n_trs <span class="sc">*</span> n_voxels), n_trs, n_voxels)</span>
+<span id="cb5-34"><a href="#cb5-34" tabindex="-1"></a><span class="cf">for</span> (v <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span>n_voxels) {</span>
+<span id="cb5-35"><a href="#cb5-35" tabindex="-1"></a>  Y_data[, v] <span class="ot">&lt;-</span> Y_data[, v] <span class="sc">+</span> signal_conv <span class="sc">*</span> (v <span class="sc">&lt;=</span> n_voxels <span class="sc">/</span> <span class="dv">2</span>) <span class="sc">*</span> <span class="fl">0.5</span></span>
+<span id="cb5-36"><a href="#cb5-36" tabindex="-1"></a>}</span></code></pre></div>
+<p>Fit with convergence tracking:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a>fit <span class="ot">&lt;-</span> <span class="fu">fit_hrfdecoder</span>(</span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>  <span class="at">Y =</span> Y_data,</span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a>  <span class="at">ev_model =</span> ev_model,</span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a>  <span class="at">base_model =</span> bl_model,</span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a>  <span class="at">lambda_W =</span> <span class="fl">0.1</span>,</span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a>  <span class="at">max_iter =</span> <span class="dv">15</span>,</span>
+<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a>  <span class="at">tol =</span> <span class="fl">1e-4</span>,</span>
+<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a>  <span class="at">verbose =</span> <span class="cn">FALSE</span></span>
+<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a>)</span>
+<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a></span>
+<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a><span class="co"># Inspect convergence info</span></span>
+<span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a><span class="fu">names</span>(fit<span class="sc">$</span>convergence)</span>
+<span id="cb6-13"><a href="#cb6-13" tabindex="-1"></a><span class="co">#&gt; NULL</span></span></code></pre></div>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="co"># Did it converge?</span></span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">is.null</span>(fit<span class="sc">$</span>convergence<span class="sc">$</span>converged)) {</span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a>  <span class="fu">cat</span>(<span class="st">&quot;Converged:&quot;</span>, fit<span class="sc">$</span>convergence<span class="sc">$</span>converged, <span class="st">&quot;</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a>  <span class="cf">if</span> (fit<span class="sc">$</span>convergence<span class="sc">$</span>converged) {</span>
+<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a>    <span class="fu">cat</span>(<span class="st">&quot;Iterations:&quot;</span>, fit<span class="sc">$</span>convergence<span class="sc">$</span>iterations, <span class="st">&quot;</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a>  }</span>
+<span id="cb7-7"><a href="#cb7-7" tabindex="-1"></a>} <span class="cf">else</span> {</span>
+<span id="cb7-8"><a href="#cb7-8" tabindex="-1"></a>  <span class="fu">cat</span>(<span class="st">&quot;Convergence info not available in this version</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb7-9"><a href="#cb7-9" tabindex="-1"></a>}</span>
+<span id="cb7-10"><a href="#cb7-10" tabindex="-1"></a><span class="co">#&gt; Convergence info not available in this version</span></span></code></pre></div>
+<div id="warning-signs" class="section level3">
+<h3>Warning signs</h3>
+<ul>
+<li><strong>Max iterations reached</strong>: Increase
+<code>max_iter</code> or check parameter values</li>
+<li><strong>Oscillating objective</strong>: Reduce learning rate (not
+exposed) or increase regularization</li>
+<li><strong>Very few iterations</strong>: May indicate poor
+initialization or trivial solution</li>
+</ul>
+</div>
+</div>
+<div id="soft-labels" class="section level2">
+<h2>Understanding soft labels</h2>
+<p>Soft labels represent the algorithm’s continuous predictions for each
+trial.</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a><span class="co"># Extract soft labels by aggregating TR-level predictions to trials</span></span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a>pred_train <span class="ot">&lt;-</span> <span class="fu">predict</span>(fit, <span class="at">newdata =</span> Y_data, <span class="at">ev_model_test =</span> ev_model, <span class="at">mode =</span> <span class="st">&quot;trial&quot;</span>)</span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a><span class="co"># For two-class case, define a signed margin (A vs B)</span></span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a>y_soft <span class="ot">&lt;-</span> <span class="fu">as.numeric</span>(pred_train<span class="sc">$</span>probs[, <span class="dv">1</span>] <span class="sc">-</span> pred_train<span class="sc">$</span>probs[, <span class="dv">2</span>])</span>
+<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a></span>
+<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a><span class="co"># Summary</span></span>
+<span id="cb8-7"><a href="#cb8-7" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;Soft label range:&quot;</span>, <span class="fu">round</span>(<span class="fu">range</span>(y_soft), <span class="dv">3</span>), <span class="st">&quot;</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb8-8"><a href="#cb8-8" tabindex="-1"></a><span class="co">#&gt; Soft label range: -0.22 0.189</span></span>
+<span id="cb8-9"><a href="#cb8-9" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;Mean absolute value:&quot;</span>, <span class="fu">round</span>(<span class="fu">mean</span>(<span class="fu">abs</span>(y_soft)), <span class="dv">3</span>), <span class="st">&quot;</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb8-10"><a href="#cb8-10" tabindex="-1"></a><span class="co">#&gt; Mean absolute value: 0.143</span></span>
+<span id="cb8-11"><a href="#cb8-11" tabindex="-1"></a></span>
+<span id="cb8-12"><a href="#cb8-12" tabindex="-1"></a><span class="co"># For binary classification, expect negative/positive split</span></span>
+<span id="cb8-13"><a href="#cb8-13" tabindex="-1"></a>true_labels <span class="ot">&lt;-</span> <span class="fu">ifelse</span>(conditions <span class="sc">==</span> <span class="st">&quot;A&quot;</span>, <span class="dv">1</span>, <span class="sc">-</span><span class="dv">1</span>)</span>
+<span id="cb8-14"><a href="#cb8-14" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;</span><span class="sc">\n</span><span class="st">Correlation with true labels:&quot;</span>, <span class="fu">round</span>(<span class="fu">cor</span>(y_soft, true_labels), <span class="dv">3</span>), <span class="st">&quot;</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb8-15"><a href="#cb8-15" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb8-16"><a href="#cb8-16" tabindex="-1"></a><span class="co">#&gt; Correlation with true labels: 0.963</span></span></code></pre></div>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="cf">if</span> (<span class="fu">requireNamespace</span>(<span class="st">&quot;ggplot2&quot;</span>, <span class="at">quietly =</span> <span class="cn">TRUE</span>)) {</span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a>  <span class="fu">library</span>(ggplot2)</span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a></span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a>  plot_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a>    <span class="at">trial =</span> <span class="dv">1</span><span class="sc">:</span>n_trials,</span>
+<span id="cb9-6"><a href="#cb9-6" tabindex="-1"></a>    <span class="at">soft_label =</span> y_soft,</span>
+<span id="cb9-7"><a href="#cb9-7" tabindex="-1"></a>    <span class="at">condition =</span> conditions,</span>
+<span id="cb9-8"><a href="#cb9-8" tabindex="-1"></a>    <span class="at">true_label =</span> true_labels</span>
+<span id="cb9-9"><a href="#cb9-9" tabindex="-1"></a>  )</span>
+<span id="cb9-10"><a href="#cb9-10" tabindex="-1"></a></span>
+<span id="cb9-11"><a href="#cb9-11" tabindex="-1"></a>  <span class="fu">ggplot</span>(plot_df, <span class="fu">aes</span>(<span class="at">x =</span> trial, <span class="at">y =</span> soft_label, <span class="at">color =</span> condition)) <span class="sc">+</span></span>
+<span id="cb9-12"><a href="#cb9-12" tabindex="-1"></a>    <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="fl">2.5</span>) <span class="sc">+</span></span>
+<span id="cb9-13"><a href="#cb9-13" tabindex="-1"></a>    <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="dv">0</span>, <span class="at">linetype =</span> <span class="st">&quot;dashed&quot;</span>, <span class="at">color =</span> <span class="st">&quot;gray50&quot;</span>) <span class="sc">+</span></span>
+<span id="cb9-14"><a href="#cb9-14" tabindex="-1"></a>    (<span class="cf">if</span> (<span class="fu">requireNamespace</span>(<span class="st">&quot;albersdown&quot;</span>, <span class="at">quietly =</span> <span class="cn">TRUE</span>)) albersdown<span class="sc">::</span><span class="fu">scale_color_albers</span>(params<span class="sc">$</span>family) <span class="cf">else</span> ggplot2<span class="sc">::</span><span class="fu">scale_color_discrete</span>()) <span class="sc">+</span></span>
+<span id="cb9-15"><a href="#cb9-15" tabindex="-1"></a>    <span class="fu">labs</span>(</span>
+<span id="cb9-16"><a href="#cb9-16" tabindex="-1"></a>      <span class="at">title =</span> <span class="st">&quot;Learned soft labels&quot;</span>,</span>
+<span id="cb9-17"><a href="#cb9-17" tabindex="-1"></a>      <span class="at">subtitle =</span> <span class="st">&quot;Continuous trial predictions from weakly supervised learning&quot;</span>,</span>
+<span id="cb9-18"><a href="#cb9-18" tabindex="-1"></a>      <span class="at">x =</span> <span class="st">&quot;Trial number&quot;</span>,</span>
+<span id="cb9-19"><a href="#cb9-19" tabindex="-1"></a>      <span class="at">y =</span> <span class="st">&quot;Soft label value&quot;</span>,</span>
+<span id="cb9-20"><a href="#cb9-20" tabindex="-1"></a>      <span class="at">color =</span> <span class="st">&quot;Condition&quot;</span></span>
+<span id="cb9-21"><a href="#cb9-21" tabindex="-1"></a>    )</span>
+<span id="cb9-22"><a href="#cb9-22" tabindex="-1"></a>}</span></code></pre></div>
+<div class="figure" style="text-align: center">
+<img role="img" aria-label="Soft labels learned during training. Continuous predictions capture graded trial-level responses rather than hard class assignments." src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABUAAAAM+CAYAAADb/quwAAAEDmlDQ1BrQ0dDb2xvclNwYWNlR2VuZXJpY1JHQgAAOI2NVV1oHFUUPpu5syskzoPUpqaSDv41lLRsUtGE2uj+ZbNt3CyTbLRBkMns3Z1pJjPj/KRpKT4UQRDBqOCT4P9bwSchaqvtiy2itFCiBIMo+ND6R6HSFwnruTOzu5O4a73L3PnmnO9+595z7t4LkLgsW5beJQIsGq4t5dPis8fmxMQ6dMF90A190C0rjpUqlSYBG+PCv9rt7yDG3tf2t/f/Z+uuUEcBiN2F2Kw4yiLiZQD+FcWyXYAEQfvICddi+AnEO2ycIOISw7UAVxieD/Cyz5mRMohfRSwoqoz+xNuIB+cj9loEB3Pw2448NaitKSLLRck2q5pOI9O9g/t/tkXda8Tbg0+PszB9FN8DuPaXKnKW4YcQn1Xk3HSIry5ps8UQ/2W5aQnxIwBdu7yFcgrxPsRjVXu8HOh0qao30cArp9SZZxDfg3h1wTzKxu5E/LUxX5wKdX5SnAzmDx4A4OIqLbB69yMesE1pKojLjVdoNsfyiPi45hZmAn3uLWdpOtfQOaVmikEs7ovj8hFWpz7EV6mel0L9Xy23FMYlPYZenAx0yDB1/PX6dledmQjikjkXCxqMJS9WtfFCyH9XtSekEF+2dH+P4tzITduTygGfv58a5VCTH5PtXD7EFZiNyUDBhHnsFTBgE0SQIA9pfFtgo6cKGuhooeilaKH41eDs38Ip+f4At1Rq/sjr6NEwQqb/I/DQqsLvaFUjvAx+eWirddAJZnAj1DFJL0mSg/gcIpPkMBkhoyCSJ8lTZIxk0TpKDjXHliJzZPO50dR5ASNSnzeLvIvod0HG/mdkmOC0z8VKnzcQ2M/Yz2vKldduXjp9bleLu0ZWn7vWc+l0JGcaai10yNrUnXLP/8Jf59ewX+c3Wgz+B34Df+vbVrc16zTMVgp9um9bxEfzPU5kPqUtVWxhs6OiWTVW+gIfywB9uXi7CGcGW/zk98k/kmvJ95IfJn/j3uQ+4c5zn3Kfcd+AyF3gLnJfcl9xH3OfR2rUee80a+6vo7EK5mmXUdyfQlrYLTwoZIU9wsPCZEtP6BWGhAlhL3p2N6sTjRdduwbHsG9kq32sgBepc+xurLPW4T9URpYGJ3ym4+8zA05u44QjST8ZIoVtu3qE7fWmdn5LPdqvgcZz8Ww8BWJ8X3w0PhQ/wnCDGd+LvlHs8dRy6bLLDuKMaZ20tZrqisPJ5ONiCq8yKhYM5cCgKOu66Lsc0aYOtZdo5QCwezI4wm9J/v0X23mlZXOfBjj8Jzv3WrY5D+CsA9D7aMs2gGfjve8ArD6mePZSeCfEYt8CONWDw8FXTxrPqx/r9Vt4biXeANh8vV7/+/16ffMD1N8AuKD/A/8leAvFY9bLAAAAOGVYSWZNTQAqAAAACAABh2kABAAAAAEAAAAaAAAAAAACoAIABAAAAAEAAAVAoAMABAAAAAEAAAM+AAAAAEEVLW0AAEAASURBVHgB7N0HnFxV2T/wZ5NN7z0hAaT3DoIUpRcBEUVAQJGiiAhSBURAEXkRLAiCBQuKKAg2EJBIEaRJ770GQrIJpLdNspt37r7ymrKbTLmzM3Pne/+f+WRn7jnPPed77v9d98edexsW5bawESBAgAABAgQIECBAgAABAgQIECBAIIMCXTI4J1MiQIAAAQIECBAgQIAAAQIECBAgQIBAm4AA1IlAgAABAgQIECBAgAABAgQIECBAgEBmBQSgmV1aEyNAgAABAgQIECBAgAABAgQIECBAQADqHCBAgAABAgQIECBAgAABAgQIECBAILMCAtDMLq2JESBAgAABAgQIECBAgAABAgQIECAgAHUOECBAgAABAgQIECBAgAABAgQIECCQWQEBaGaX1sQIECBAgAABAgQIECBAgAABAgQIEBCAOgcIECBAgAABAgQIECBAgAABAgQIEMisgAA0s0trYgQIECBAgAABAgQIECBAgAABAgQICECdAwQIECBAgAABAgQIECBAgAABAgQIZFZAAJrZpTUxAgQIECBAgAABAgQIECBAgAABAgQEoM4BAgQIECBAgAABAgQIECBAgAABAgQyKyAAzezSmhgBAgQIECBAgAABAgQIECBAgAABAgJQ5wABAgQIECBAgAABAgQIECBAgAABApkVEIBmdmlNjAABAgQIECBAgAABAgQIECBAgAABAahzgAABAgQIECBAgAABAgQIECBAgACBzAoIQDO7tCZGgAABAgQIECBAgAABAgQIECBAgIAA1DlAgAABAgQIECBAgAABAgQIECBAgEBmBQSgmV1aEyNAgAABAgQIECBAgAABAgQIECBAQADqHCBAgAABAgQIECBAgAABAgQIECBAILMCAtDMLq2JESBAgAABAgQIECBAgAABAgQIECAgAHUOECBAgAABAgQIECBAgAABAgQIECCQWQEBaGaX1sQIECBAgAABAgQIECBAgAABAgQIEBCAOgcIECBAgAABAgQIECBAgAABAgQIEMisgAA0s0trYgQIECBAgAABAgQIECBAgAABAgQICECdAwQIECBAgAABAgQIECBAgAABAgQIZFZAAJrZpTUxAgQIECBAgAABAgQIECBAgAABAgQEoM4BAgQIECBAgAABAgQIECBAgAABAgQyKyAAzezSmhgBAgQIECBAgAABAgQIECBAgAABAgJQ5wABAgQIECBAgAABAgQIECBAgAABApkVEIBmdmlNjAABAgQIECBAgAABAgQIECBAgAABAahzgAABAgQIECBAgAABAgQIECBAgACBzAoIQDO7tCZGgAABAgQIECBAgAABAgQIECBAgIAA1DlAgAABAgQIECBAgAABAgQIECBAgEBmBQSgmV1aEyNAgAABAgQIECBAgAABAgQIECBAQADqHCBAgAABAgQIECBAgAABAgQIECBAILMCAtDMLq2JESBAgAABAgQIECBAgAABAgQIECAgAHUOECBAgAABAgQIECBAgAABAgQIECCQWQEBaGaX1sQIECBAgAABAgQIECBAgAABAgQIEBCAOgcIECBAgAABAgQIECBAgAABAgQIEMisgAA0s0trYgQIECBAgAABAgQIECBAgAABAgQICECdAwQIECBAgAABAgQIECBAgAABAgQIZFZAAJrZpTUxAgQIECBAgAABAgQIECBAgAABAgQEoM4BAgQIECBAgAABAgQIECBAgAABAgQyKyAAzezSmhgBAgQIECBAgAABAgQIECBAgAABAgJQ5wABAgQIECBAgAABAgQIECBAgAABApkVEIBmdmlNjAABAgQIECBAgAABAgQIECBAgAABAahzgAABAgQIECBAgAABAgQIECBAgACBzAoIQDO7tCZGgAABAgQIECBAgAABAgQIECBAgIAA1DlAgAABAgQIECBAgAABAgQIECBAgEBmBQSgmV1aEyNAgAABAgQIECBAgAABAgQIECBAQADqHCBAgAABAgQIECBAgAABAgQIECBAILMCAtDMLq2JESBAgAABAgQIECBAgAABAgQIECAgAHUOECBAgAABAgQIECBAgAABAgQIECCQWQEBaGaX1sQIECBAgAABAgQIECBAgAABAgQIEBCAOgcIECBAgAABAgQIECBAgAABAgQIEMisgAA0s0trYgQIECBAgAABAgQIECBAgAABAgQICECdAwQIECBAgAABAgQIECBAgAABAgQIZFZAAJrZpTUxAgQIECBAgAABAgQIECBAgAABAgQEoM4BAgQIECBAgAABAgQIECBAgAABAgQyKyAAzezSmhgBAgQIECBAgAABAgQIECBAgAABAgJQ5wABAgQIECBAgAABAgQIECBAgAABApkVEIBmdmlNjAABAgQIECBAgAABAgQIECBAgAABAahzgAABAgQIECBAgAABAgQIECBAgACBzAoIQDO7tCZGgAABAgQIECBAgAABAgQIECBAgIAA1DlAgAABAgQIECBAgAABAgQIECBAgEBmBQSgmV1aEyNAgAABAgQIECBAgAABAgQIECBAQADqHCBAgAABAgQIECBAgAABAgQIECBAILMCAtDMLq2JESBAgAABAgQIECBAgAABAgQIECAgAHUOECBAgAABAgQIECBAgAABAgQIECCQWQEBaGaX1sQIECBAgAABAgQIECBAgAABAgQIEBCAOgcIECBAgAABAgQIECBAgAABAgQIEMisgAA0s0trYgQIECBAgAABAgQIECBAgAABAgQICECdAwQIECBAgAABAgQIECBAgAABAgQIZFZAAJrZpTUxAgQIECBAgAABAgQIECBAgAABAgQEoM4BAgQIECBAgAABAgQIECBAgAABAgQyKyAAzezSmhgBAgQIECBAgAABAgQIECBAgAABAgJQ5wABAgQIECBAgAABAgQIECBAgAABApkVEIBmdmlNjAABAgQIECBAgAABAgQIECBAgAABAahzgAABAgQIECBAgAABAgQIECBAgACBzAoIQDO7tCZGgAABAgQIECBAgAABAgQIECBAgIAA1DlAgAABAgQIECBAgAABAgQIECBAgEBmBQSgmV1aEyNAgAABAgQIECBAgAABAgQIECBAQADqHCBAgAABAgQIECBAgAABAgQIECBAILMCAtDMLq2JESBAgAABAgQIECBAgAABAgQIECAgAHUOECBAgAABAgQIECBAgAABAgQIECCQWQEBaGaX1sQIECBAgAABAgQIECBAgAABAgQIEBCAOgcIECBAgAABAgQIECBAgAABAgQIEMisgAA0s0trYgQIECBAgAABAgQIECBAgAABAgQICECdAwQIECBAgAABAgQIECBAgAABAgQIZFZAAJrZpTUxAgQIECBAgAABAgQIECBAgAABAgQEoM4BAgQIECBAgAABAgQIECBAgAABAgQyKyAAzezSmhgBAgQIECBAgAABAgQIECBAgAABAgJQ5wABAgQIECBAgAABAgQIECBAgAABApkVaMzszEyMAAECBAgQIEAgL4FZs+bGPfc+H2+OmxzTps+OoUP6xeqrjYztt103evTolleNem/0+ptT49+PvB0TJs6K1kWLYuTwvrHFpqNi3bWH1TuN+RMgQIAAAQIEKi4gAK34EhgAAQIECBAgQKAyAkngeeF3/xw3/u3hWLCgZZlB9OndIz590PZx8lf2zYWi/ZfZ74OIv9/+clx86X3x3AuT2+VYbdWBcdJx28YnP7Z+dOnS0G4bHxIgQIAAAQIECJRXoGFRbivvIVQnQIAAAQIECBCoNoE//PH+OOX0q6K5eeEKhzZgQO/4+Y+PjY/ssMEK29ZLgzlzF8QJp90SN499Ka8pb7fNKnHlpR+LQQN75dVeIwIECBAgQIAAgfQEBKDpWapEgAABAgQIEKgJgV9cdUecefY1BY21a9cu8euffzl233XTgvplsXHz/IVxwGeui0cef6eg6a21xuC46bpDY0D/ngX105gAAQIECBAgQKA0AQ9BKs1PbwIECBAgQIBATQk88OCLcda5vyt4zC0trXHMl38Wr73eVHDfrHU48xu3Fxx+JgYvvzoljjvlb1njMB8CBAgQIECAQNULCECrfokMkAABAgQIECCQjkBy56Mk/GxtLe4OSLNnz4vzLrg+ncHUaJUnnp4Yv7/h6aJHf8fdr8c/7nq16P46EiBAgAABAgQIFC4gAC3cTA8CBAgQIECAQE0K3HX3s/HMc2+VNPZb/v5YXV8FesXPHyrJL+l8+ZX/LrmGAgQIECBAgAABAvkLCEDzt9KSAAECBAgQIFDTArfe9lgq409C0Hrc5s9viTvvea3kqT/06Ph4d8qckusoQIAAAQIECBAgkJ+AADQ/J60IECBAgAABAjUv8PQz41KZwzPPpVMnlcF0YpHXx02N2bMXlHzE3J0I4vkXJpdcRwECBAgQIECAAIH8BASg+TlpRYAAAQIECBCoeYGmSdNSmUNT0/RU6tRakUmTZqc25KbJs1KrpRABAgQIECBAgMDyBQSgy/exlwABAgQIECCQGYGePbunMpeePbulUqfWivTs2ZjakNOsldqgFCJAgAABAgQIZFRAAJrRhTUtAgQIECBAgMDSAqNXGrz0R0W9X2lUOnWKOngFO600ql9qR19pRHq1UhuUQgQIECBAgACBjAoIQDO6sKZFgAABAgQIEFhaYPvt1lv6o6Lef3j7dOoUdfAKdho9qn+sturAkkfQv1+P2HjDkSXXUYAAAQIECBAgQCA/AQFofk5aESBAgAABAgRqXmC/fbaKLl0aSppHv369YpedNiqpRi13/vjepYe/++y5djQ2+p/htXweGDsBAgQIECBQWwL+l1dtrZfREiBAgAABAgSKFljtA8Pj0wdtX3T/pOMJx300+vbtVVKNWu58zJFbxsABPYueQvduXeOk47Ytur+OBAgQIECAAAEChQsIQAs304MAAQIECBAgULMC55z5qfjAqsOKGv9WW6wRx35+j6L6ZqXTgP4943vfLt7gm2ftFGNW6p8VDvMgQIAAAQIECNSEgAC0JpbJIAkQIECAAAEC6QgMGtQ3rrnqxFhp1KCCCm6w3spx1c+Pj+7d03sSekEDqKLGH9197fjWWTtHQ4F3Ezjhi1vH5w7ZrIpmYigECBAgQIAAgfoQaFiU2+pjqmZJgAABAgQIECDwvsCkydPjK6f8Mu646+n3P+rw34MO2DYu/PZnok/vHh22qccdt9/1anz1nLExoWnWcqc/eFCv+ObXdooD9ttgue3sJECAAAECBAgQKI+AALQ8rqoSIECAAAECBGpC4L4HXohrfv+vuP2up2LatNn/P+YRIwbGHrtuEod/ZqfYaINV/v9zPywpMK95YVxz3ZPxt9teiocfGx8tLf93bUFydegmG42MvXNXix5+yKbRr6/weEk57wgQIECAAAECnScgAO08a0ciQIAAAQIECFS1wMyZc2NqLgQdMqSfqz2LWKnW1kXx7nuz20LQYUP7eNJ7EYa6ECBAgAABAgTKISAALYeqmgQIECBAgAABAgQIECBAgAABAgQIVIWAhyBVxTIYBAECBAgQIECAAAECBAgQIECAAAEC5RAQgJZDVU0CBAgQIECAAAECBAgQIECAAAECBKpCQABaFctgEAQIECBAgAABAgQIECBAgAABAgQIlENAAFoOVTUJECBAgAABAgQIECBAgAABAgQIEKgKAQFoVSyDQRAgQIAAAQIECBAgQIAAAQIECBAgUA4BAWg5VNUkQIAAAQIECBAgQIAAAQIECBAgQKAqBASgVbEMBkGAAAECBAgQIECAAAECBAgQIECAQDkEBKDlUFWTAAECBAgQIECAAAECBAgQIECAAIGqEBCAVsUyGAQBAgQIECBAgAABAgQIECBAgAABAuUQEICWQ1VNAgQIECBAgAABAgQIECBAgAABAgSqQkAAWhXLYBAECBAgQIAAAQIECBAgQIAAAQIECJRDQABaDlU1CRAgQIAAAQIECBAgQIAAAQIECBCoCgEBaFUsg0EQIECAAAECBAgQIECAAAECBAgQIFAOAQFoOVTVJECAAAECBAgQIECAAAECBAgQIECgKgQEoFWxDAZBgAABAgQIECBAgAABAgQIECBAgEA5BASg5VBVkwABAgQIECBAgAABAgQIECBAgACBqhAQgFbFMhgEAQIECBAgQIAAAQIECBAgQIAAAQLlEBCAlkNVTQIECBAgQIAAAQIECBAgQIAAAQIEqkJAAFoVy2AQBAgQIECAAAECBAgQIECAAAECBAiUQ0AAWg5VNQkQIECAAAECBAgQIECAAAECBAgQqAoBAWhVLINBECBAgAABAgQIECBAgAABAgQIECBQDgEBaDlU1SRAgAABAgQIECBAgAABAgQIECBAoCoEBKBVsQwGQYAAAQIECBAgQIAAAQIECBAgQIBAOQQEoOVQVZMAAQIECBAgQIAAAQIECBAgQIAAgaoQEIBWxTIYBAECBAgQIECAAAECBAgQIECAAAEC5RAQgJZDVU0CBAgQIECAAAECBAgQIECAAAECBKpCQABaFctgEAQIECBAgAABAgQIECBAgAABAgQIlENAAFoOVTUJECBAgAABAgQIECBAgAABAgQIEKgKAQFoVSyDQRAgQIAAAQIECBAgQIAAAQIECBAgUA4BAWg5VNUkQIAAAQIECBAgQIAAAQIECBAgQKAqBASgVbEMBkGAAAECBAgQIECAAAECBAgQIECAQDkEBKDlUFWTAAECBAgQIECAAAECBAgQIECAAIGqEBCAVsUyGAQBAgQIECBAgAABAgQIECBAgAABAuUQEICWQ1VNAgQIECBAgAABAgQIECBAgAABAgSqQkAAWhXLYBAECBAgQIAAAQIECBAgQIAAAQIECJRDQABaDlU1CRAgQIAAAQIECBAgQIAAAQIECBCoCgEBaFUsg0EQIECAAAECBAgQIECAAAECBAgQIFAOAQFoOVTVJECAAAECBAgQIECAAAECBAgQIECgKgQEoFWxDAZBgAABAgQIECBAgAABAgQIECBAgEA5BASg5VBVkwABAgQIECBAgAABAgQIECBAgACBqhAQgFbFMhgEAQIECBAgQIAAAQIECBAgQIAAAQLlEBCAlkNVTQIECBAgQIAAAQIECBAgQIAAAQIEqkJAAFoVy2AQBAgQIECAAAECBAgQIECAAAECBAiUQ0AAWg5VNQkQIECAAAECBAgQIECAAAECBAgQqAoBAWhVLINBECBAgAABAgQIECBAgAABAgQIECBQDgEBaDlU1SRAgAABAgQIECBAgAABAgQIECBAoCoEBKBVsQwGQYAAAQIECBAgQIAAAQIECBAgQIBAOQQEoOVQVZMAAQIECBAgQIAAAQIECBAgQIAAgaoQEIBWxTIYBAECBAgQIECAAAECBAgQIECAAAEC5RAQgJZDVU0CBAgQIECAAAECBAgQIECAAAECBKpCQABaFctgEAQIECBAgAABAgQIECBAgAABAgQIlENAAFoOVTUJECBAgAABAgQIECBAgAABAgQIEKgKAQFoVSyDQRAgQIAAAQIECBAgQIAAAQIECBAgUA4BAWg5VNUkQIAAAQIECBAgQIAAAQIECBAgQKAqBASgVbEMBkGAAAECBAgQIECAAAECBAgQIECAQDkEBKDlUFWTAAECBAgQIECAAAECBAgQIECAAIGqEBCAVsUyGAQBAgQIECBAgAABAgQIECBAgAABAuUQEICWQ1VNAgQIECBAgAABAgQIECBAgAABAgSqQkAAWhXLYBAECBAgQIAAAQIECBAgQIAAAQIECJRDQABaDlU1CRAgQIAAAQIECBAgQIAAAQIECBCoCgEBaFUsg0EQIECAAAECBAgQIECAAAECBAgQIFAOAQFoOVTVJECAAAECBAgQIECAAAECBAgQIECgKgQEoFWxDAZBgAABAgQIECBAgAABAgQIECBAgEA5BASgOdVFixbFwoUt0dLSWg5jNQkQIEAgwwKtra1tv0OS3yU2AgQIECBQiMDClpa23yGF9NGWAAECBAi8n2Mlf4vY8hMQgOacWlsXxdvvTIop02bk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CBAgQIAAAQIECNS5gAC0zk8A0ydAgAABAgQIECBAgAABAgQIECCQZQEBaJZX19wIECBAgAABAgQIECBAgAABAgQI1LmAALTOTwDTJ0CAAAECBAgQIECAAAECBAgQIJBlAQFollfX3AgQIECAAAECBAgQIECAAAECBAjUuYAAtM5PANMnQIAAAQIECBAgQIAAAQIECBAgkGUBAWiWV9fcCBAgQIAAAQIECBAgQIAAAQIECNS5gAC0zk8A0ydAgAABAgQIECBAgAABAgQIECCQZQEBaJZX19wIECBAgAABAgQIECBAgAABAgQI1LmAALTOTwDTJ0CAAAECBAgQIECAAAECBAgQIJBlAQFollfX3AgQIECAAAECBAgQIECAAAECBAjUuYAAtM5PANMnQIAAAQIECBAgQIAAAQIECBAgkGUBAWiWV9fcCBAgQIAAAQIECBAgQIAAAQIECNS5gAC0zk8A0ydAgAABAgQIECBAgAABAgQIECCQZQEBaJZX19wIECBAgAABAgQIECBAgAABAgQI1LmAALTOTwDTJ0CAAAECBAgQIECAAAECBAgQIJBlAQFollfX3AgQIECAAAECBAgQIECAAAECBAjUuYAAtM5PANMnQIAAAQIECBAgQIAAAQIECBAgkGUBAWiWV9fcCBAgQIAAAQIECBAgQIAAAQIECNS5gAC0zk8A0ydAgAABAgQIECBAgAABAgQIECCQZQEBaJZX19wIECBAgAABAgQIECBAgAABAgQI1LmAALTOTwDTJ0CAAAECBAgQIECAAAECBAgQIJBlAQFollfX3AgQIECAAAECBAgQIECAAAECBAjUuYAAtM5PANMnQIAAAQIECBAgQIAAAQIECBAgkGUBAWiWV9fcCBAgQIAAAQIECBAgQIAAAQIECNS5gAC0zk8A0ydAgAABAgQIECBAgAABAgQIECCQZQEBaJZX19wIECBAgAABAgQIECBAgAABAgQI1LmAALTOTwDTJ0CAAAECBAgQIECAAAECBAgQIJBlAQFollfX3AgQIECAAAECBAgQIECAAAECBAjUuYAAtM5PANMnQIAAAQIECBAgQIAAAQIECBAgkGUBAWiWV9fcCBAgQIAAAQIECBAgQIAAAQIECNS5gAC0zk8A0ydAgAABAgQIECBAgAABAgQIECCQZQEBaJZX19wIECBAgAABAgQIECBA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BAgQIECAAAECBAgQIECAAAECBCooIACtIL5DEyBAgAABAgQIECBAgAABAgQIECBQXgEBaHl9VSdAgAABAgQIECBAgAABAgQIECBAoIICAtAK4js0AQIECBAgQIAAAQIECBAgQIAAAQLlFRCAltdXdQIECBAgQIAAAQIECBAgQIAAAQIEKiggAK0gvkMTIECAAAECBAgQIECAAAECBAgQIFBeAQFoeX1VJ0CAAAECBAgQIECAAAECBAgQIECgggIC0AriOzQBAgQIECBAgAABAgQIECBAgAABAuUVEICW11d1AgQIECBAgAABAgQIECBAgAABAgQqKCAArSC+QxMgQIAAAQIECBAgQIAAAQIECBAgUF4BAWh5fVUnQIAAAQIECBAgQIAAAQIECBAgQKCCAgLQCuI7NAECBAgQIECAAAECBAgQIECAAAEC5RUQgJbXV3UCBAgQIECAAAECBAgQIECAAAECBCooIACtIL5DEyBAgAABAgQIECBAgAABAgQIECBQXgEBaHl9VSdAgAABAgQIECBAgAABAgQIECBAoIICAtAK4js0AQIECBAgQIAAAQIECBAgQIAAAQLlFRCAltdXdQIECBAgQIAAAQIECBAgQIAAAQIEKiggAK0gvkMTIECAAAECBAgQIECAAAECBAgQIFBeAQFoeX1VJ0CAAAECBAgQIECAAAECBAgQIECgggIC0AriOzQBAgQIECBAgAABAgQIECBAgAABAuUVEICW11d1AgQIECBAgAABAgQIECBAgAABAgQqKCAArSC+QxMgQIAAAQIECBAgQIAAAQIECBAgUF4BAWh5fVUnQIAAAQIECBAgQIAAAQIECBAgQKCCAgLQCuI7NAECBAgQIECAAAECBAgQIECAAAEC5RUQgJbXV3UCBAgQIECAAAECBAgQIECAAAECBCooIACtIL5DEyBAgAABAgQIECBAgAABAgQIECBQXgEBaHl9VSdAgAABAgQIECBAgAABAgQIECBAoIICAtAK4js0AQIECBAgQIAAAQIECBAgQIAAAQLlFRCAltdXdQIECBAgQIAAAQIECBAgQIAAAQIEKiggAK0gvkMTIECAAAECBAgQIECAAAECBAgQIFBeAQFoeX1VJ0CAAAECBAgQIECAAAECBAgQIECgggIC0AriOzQBAgQIECBAgAABAgQIECBAgAABAuUVaCxv+fJXnzNnTpx55pkFH+jEE0+MMWNWbuvX0tra9m9r7t8FCxZ2WOvxxx+Pa675bYf7O9pxzjnnRP/+Azra3e7nd999d9x0043t7lveh9/93/buA06uqmwc8LvJbjab3RTSE0ISIASQIE166DUC0hRQQbEXLB8IfwsWrICCnwVpovjRRFQEBQGlCqiAofcOIWXTy6bsJpv858YvfgnsJnOn7MzsPJffkpl7zznvOc+ZvTvzzi3nnb++zR1u+9Of/hT33HN3h9s6W9m3b9/4xjfO6mxzp+uvvvrqeOSRhzvd3tGGjTfeOE499bSONq133UUXXRQvvfTiesu8eePWW28dH/nIR9+8eoPPzz333Jg1a+YGy61dYNddd433vOe4tVdl9firXz0zli1bllXZNYUOOuigOOSQQ9c8zerftra2+MpX0v9uHXvssbH77ntkFWNNodmzZ8c555y95mnW/37oQx+KbbaZkHX5pODLL78cF174s1R1ksKf//znY5NNRqeq9+ijj8ZVV12Zqk5S+Ktf/VoMGDAgVb2//e1v8cc/3piqTlL4+9//QfToke67sJtuuinuvvuuVLGamprirLO+mapOUviaa66Jhx+enKreyJEj47TTvpCqTlL44osvjhdffCFVva222iqOP+H9q+u0r2hf79+QtRv+wQ++H83NzWuv2uDjXXbZJY477vgNlntzga997auxdOnSN69e7/MDDzwwDj100nrLvHnj8uXLM3+Pv/Tm1Rt8fswxx8Qee+y5wXJrF5gzZ06cffb31l6V1eOTTz45JkzYNquyawq98sor8bOfXbDmadb/fvazn4sxY8ZkXT4p+Nhjj8WVV16Rqk5S+MwzvxobbbRRqnr33ntv3HjjDanqJIXPPff70bNnz1T1br755rjrrjtT1WlsbIxvfvNbqeokha+99tfxr3/9K1W9ESNGxBe+cHqqOknhSy+9JJ5//vlU9bbccsv42Mc+nqpOUvi8834QM2bMSFVv5513juOPPyFVnaTw17/+tUjeX6dZDjjggJg06Z1pqsSKFSviS1/6Yqo6SeGjjjo6Jk6cmKre3Llz43vf+26qOknhD3zgg/H2t789Vb1XX301Lrjgp1nXWbVq1eqyyT5j7NixWddLCj7++ONxxRX/k6pOUvgrXzkzBg4cmKrefffdFzfc8IdUdZLC55xzbtTWpvvIecstf4477rgjVaw+ffrEt7717VR1ksK/+c218dBDD6WqN3z48Dj99DNS1UkK//znl8Zzzz2Xqt748ePj4x//RKo6SeHzzz8vpk+fnqreO97xjjjhhPemqpMU/sY3vh6LFy9OVW+//faPww47LFWd9vb2+OIX/1+qOknhI488Kvbaa69U9ebNmxff/e53UtVJCp900gdiu+22S1Xvtddei5/+9Cep6iSFTznlM7Hpppumqvfkk0/Er371q1R1ksJf/vJXYtCgQanq/f3v98f111+fqk5S+Oyzz4m6urpU9W699Za4/fbbU9VpaGiIb387/Rxfd91v4sEHH0wVa9iwYXHGGelfu5dd9vN49tln1xsr+RtSU1PznzLjxm0Rn/zkJ//zPNsHP/zh+TFt2rRsi68ut+OOO8X73ve+VHWSwmed9Y1oaWlJVS/5DLTnnulyDB0FSPfXqKMWSrwumfAkcZl2mTlrXtT07L1OtaVLW2Pq0lnrrFv7yZx5C3KKNb15Tixa3LZ2Uxt8PH/BopxiTZ3eef87C7pw0eLUsZZn3rTmEmvxkqWpY7W2tuUUa9my1tSxlixdllOsJFmY9nXY0rIkp1jJB4a0sRYsXJw61vIcxpS8xubNX5Q61rx5c1OPKYk1e+6C1LFmzZmXU6xkn9GjtiEJm/WS6z5jxsw5sXjp8qzjJAVz3WdMmzF7nT+a2QRduKgltWGX7jMyr91c9k+57jOSfWiyJK/HbJdkv5b297js9xmZBGjaMSVeuewz5s/P7fc4p33G7NxizcrUq+3VJ9uXxOpy+ewzlizr/AvcjjqRzz4j7Zcmuewzkr91ufwetyxekvp12Nq2PKdYyfvGtK/5pTm+z8hpn5GxyMUwl/cZC3N4n5FLnOS1nLx2045rwYL5qecqiTU3894/bazkdz/t6yKJldSrq29MHma9zMn83cklVvI+Y2lre9ZxkoL57DPSfmmyYGH69xmVsc9Ylnq+Vn8+zeHzXbnvMxa1pP9skiRAc3m957LPWLgwt9+trt5n9OrdlOr3ePac3MaV7DOWtaXLuSTv73KZr+SzSdovTbp0n5H5DJ92XLm+z0hyE9nEWvNFWvJiSD7PpP27ldTLZZ+R5HZyiZV8LsxmXEm/1ixLUh4Atqbem/+t+ARo5pP7m8eU1fPGxobo1/ffbzJWZpKoyQfLusy3kw0N9Z3Wb+jd+bZOK2U2NDX2+U+s9ZVbe1vv+l5rP8368ZoxZV0hU7C+V/qXQY+Mey6x6mrTHTWSjCN505RLrJ616Y5qS2IlO9tcYqX9MJjESr7ZyiXW2t/wJO1ks9TXp4/V1pbum7c1/Uheu2nHtbwt3RGta2L1aeidOlZj5tu+XJbGPv+3z8i2fiXsM/o29Ul9BGh9r/T7py7dZ/To2n1G8vvV2ro8ktdjbZb7uO64z0iOAM1lyWWfsWJ5ay6hVs9R2v3T/Mzvfi5LLvuMPhXwPiPZZ6RNZuSyz0j+1qWdq2Se6mrT/+3q2SO3WLm8z+jZle8zMha5GObyPqNXDu8zkoRVLksu+4z2FekORFjTr4Yc3mcs6Mp9xno+t6wZQ0f/duVnk2SfkTaZ0X33Gek/cyX7mVx+j3N6n9GV+4xe6fdPSQI0lyWXfcbK9tze0+Syz1hon7HOtCb7jLRHgHbpPiPl0anJ4HJ9n5F237k6VpfuM3L7zJV8Lky7JLm6Qiw1mWzxv8+7KERrJWgj2RGmPW0h6ea2224byelVydLevjKmTG3OPG+IIYM6P+00OU33xRdfXF0nzf923HHH6JUyYZCcspAcDp922W233dJWWR0n7SkSyU5pp512Sh0r8Usc0yzJPCXzlXZ5+umnY+HChamqJacdJ6e0pl2SU53TnpY+dOjQ2GyzzdKGWv16T/sGILmMwCabbJIqVq6/W8mpGMlh/mmWxC4xTLskpxKmPe0zeU0kr420y4QJEyI5jTvNUgn7jORSDGk/7L7++uupT5Hoyn1Gchpc2lMWk3l95plnYsGC7I/iTOok+4wRI0etPopx2NCBkW3SOznVOe1p6UOGDInNN988CZtqSf5GdsU+I/kmN+0pQclAxo4dG8nphGmWXPcZyamEaU/7XLRoUTz11FNpure67DbbbBPJ5WLSLMmp/S+88EKaKqvL7rDDDlFfn+5L2lzfZ3TVPiN505+cjpl2yeV9RlfuM/r37x/J5XbSLl25z0guIZA2OZnL+4yu3Ge0trZmLsH0SFr26Ip9xrx5i2JV5r+9Ju6eep+RnNqf9jIMCUIu+4zkEgzJ6f1pl+TyLWmTcVOmTImpU6emCpXrPuOll17KXMYq3Rl0yamzaU9zTgaTy/uMXPcZyeUR0l7KYvDgwTFu3LhU7knhXPYZyeWKRo9Od2mpJG3xwAMPpO5fLu8zct1nbLHFFqlPFe/K9xn2Gf/38qmEfUZy+vv8+fP/r9NvepRcvjE5+jU5CKNPn3+f3VwJ+4zJkydnLhuW7kuGJG+S5E/yXSo+AZovQFI/2wRoIWJpgwABAgS6l0DyxiM5zSdNArR7CRgNAQIECOQqMHXarEgSO6M2zv+DXa59UI8AAQIEKk8gOW19euZyiwP6N2V+0n3pXnmjLUyP058jXJi4WiFAgAABAgQIECBAgAABAgQIECBAgEDRBSRAi04sAAECBAgQIECAAAECBAgQIECAAAECpRKQAC2VvLgECBAgQIAAAQIECBAgQIAAAQIECBRdQAK06MQCECBAgAABAgQIECBAgAABAgQIECBQKgEJ0FLJi0uAAAECBAgQIECAAAECBAgQIECAQNEFJECLTiwAAQIECBAgQIAAAQIECBAgQIAAAQKlEpAALZW8uAQIECBAgAABAgQIECBAgAABAgQIFF1AArToxAIQIECAAAECBAgQIECAAAECBAgQIFAqAQnQUsmLS4AAAQIECBAgQIAAAQIECBAgQIBA0QUkQItOLAABAgQIECBAgAABAgQIECBAgAABAqUSkAAtlby4BAgQIECAAAECBAgQIECAAAECBAgUXUACtOjEAhAgQIAAAQIECBAgQIAAAQIECBAgUCoBCdBSyYtLgAABAgQIECBAgAABAgQIECBAgEDRBSRAi04sAAECBAgQIECAAAECBAgQIECAAAECpRKQAC2VvLgECBAgQIAAAQIECBAgQIAAAQIECBRdQAK06MQCECBAgAABAgQIECBAgAABAgQIECBQKgEJ0FLJi0uAAAECBAgQIECAAAECBAgQIECAQNEFJECLTiwAAQIECBAgQIAAAQIECBAgQIAAAQKlEpAALZW8uAQIECBAgAABAgQIECBAgAABAgQIFF1AArToxAIQIECAAAECBAgQIECAAAECBAgQIFAqAQnQUsmLS4AAAQIECBAgQIAAAQIECBAgQIBA0QUkQItOLAABAgQIECBAgAABAgQIECBAgAABAqUSkAAtlby4BAgQIECAAAECBAgQIECAAAECBAgUXUACtOjEAhAgQIAAAQIECBAgQIAAAQIECBAgUCoBCdBSyYtLgAABAgQIECBAgAABAgQIECBAgEDRBSRAi04sAAECBAgQIECAAAECBAgQIECAAAECpRKQAC2VvLgECBAgQIAAAQIECBAgQIAAAQIECBRdQAK06MQCECBAgAABAgQIECBAgAABAgQIECBQKgEJ0FLJi0uAAAECBAgQIECAAAECBAgQIECAQNEFJECLTiwAAQIECBAgQIAAAQIECBAgQIAAAQKlEpAALZW8uAQIECBAgAABAgQIECBAgAABAgQIFF1AArToxAIQIECAAAECBAgQIECAAAECBAgQIFAqAQnQUsmLS4AAAQIECBAgQIAAAQIECBAgQIBA0QUkQItOLAABAgQIECBAgAABAgQIECBAgAABAqUSkAAtlby4BAgQIECAAAECBAgQIECAAAECBAgUXUACtOjEAhAgQIAAAQIECBAgQIAAAQIECBAgUCoBCdBSyYtLgAABAgQIECBAgAABAgQIECBAgEDRBSRAi04sAAECBAgQIECAAAECBAgQIECAAAECpRKQAC2VvLgECBAgQIAAAQIECBAgQIAAAQIECBRdQAK06MQCECBAgAABAgQIECBAgAABAgQIECBQKgEJ0FLJi0uAAAECBAgQIECAAAECBAgQIECAQNEFJECLTiwAAQIECBAgQIAAAQIECBAgQIAAAQKlEpAALZW8uAQIECBAgAABAgQIECBAgAABAgQIFF1AArToxAIQIECAAAECBAgQIECAAAECBAgQIFAqAQnQUsmLS4AAAQIECBAgQIAAAQIECBAgQIBA0QUkQItOLAABAgQIECBAgAABAgQIECBAgAABAqUSkAAtlby4BAgQIECAAAECBAgQIECAAAECBAgUXUACtOjEAhAgQIAAAQIECBAgQIAAAQIECBAgUCoBCdBSyYtLgAABAgQIECBAgAABAgQIECBAgEDRBSRAi04sAAECBAgQIECAAAECBAgQIECAAAECpRKQAC2VvLgECBAgQIAAAQIECBAgQIAAAQIECBRdQAK06MQCECBAgAABAgQIECBAgAABAgQIECBQKgEJ0FLJi0uAAAECBAgQIECAAAECBAgQIECAQNEFJECLTiwAAQIECBAgQIAAAQIECBAgQIAAAQKlEpAALZW8uAQIECBAgAABAgQIECBAgAABAgQIFF1AArToxAIQIECAAAECBAgQIECAAAECBAgQIFAqAQnQUsmLS4AAAQIECBAgQIAAAQIECBAgQIBA0QUkQItOLAABAgQIECBAgAABAgQIECBAgAABAqUSkAAtlby4BAgQIECAAAECBAgQIECAAAECBAgUXUACtOjEAhAgQIAAAQIECBAgQIAAAQIECBAgUCoBCdBSyYtLgAABAgQIECBAgAABAgQIECBAgEDRBSRAi04sAAECBAgQIECAAAECBAgQIECAAAECpRKQAC2VvLgECBAgQIAAAQIECBAgQIAAAQIECBRdQAK06MQCECBAgAABAgQIECBAgAABAgQIECBQKgEJ0FLJi0uAAAECBAgQIECAAAECBAgQIECAQNEFJECLTiwAAQIECBAgQIAAAQIECBAgQIAAAQKlEpAALZW8uAQIECBAgAABAgQIECBAgAABAgQIFF1AArToxAIQIECAAAECBAgQIECAAAECBAgQIFAqAQnQUsmLS4AAAQIECBAgQIAAAQIECBAgQIBA0QUkQItOLAABAgQIECBAgAABAgQIECBAgAABAqUSkAAtlby4BAgQIECAAAECBAgQIECAAAECBAgUXUACtOjEAhAgQIAAAQIECBAgQIAAAQIECBAgUCoBCdBSyYtLgAABAgQIECBAgAABAgQIECBAgEDRBSRAi04sAAECBAgQIECAAAECBAgQIECAAAECpRKQAC2VvLgECBAgQIAAAQIECBAgQIAAAQIECBRdQAK06MQCECBAgAABAgQIECBAgAABAgQIECBQKgEJ0FLJi0uAAAECBAgQIECAAAECBAgQIECAQNEFJECLTiwAAQIECBAgQIAAAQIECBAgQIAAAQKlEpAALZW8uAQIECBAgAABAgQIECBAgAABAgQIFF1AArToxAIQIECAAAECBAgQIECAAAECBAgQIFAqAQnQUsmLS4AAAQIECBAgQIAAAQIECBAgQIBA0QUkQItOLAABAgQIECBAgAABAgQIECBAgAABAqUSkAAtlby4BAgQIECAAAECBAgQIECAAAECBAgUXUACtOjEAhAgQIAAAQIECBAgQIAAAQIECBAgUCoBCdBSyYtLgAABAgQIECBAgAABAgQIECBAgEDRBSRAi04sAAECBAgQIECAAAECBAgQIECAAAECpRKQAC2VvLgECBAgQIAAAQIECBAgQIAAAQIECBRdQAK06MQCECBAgAABAgQIECBAgAABAgQIECBQKgEJ0FLJi0uAAAECBAgQIECAAAECBAgQIECAQNEFJECLTiwAAQIECBAgQIAAAQIECBAgQIAAAQKlEpAALZW8uAQIECBAgAABAgQIECBAgAABAgQIFF1AArToxAIQIECAAAECBAgQIECAAAECBAgQIFAqAQnQUsmLS4AAAQIECBAgQIAAAQIECBAgQIBA0QUkQItOLAABAgQIECBAgAABAgQIECBAgAABAqUSkAAtlby4BAgQIECAAAECBAgQIECAAAECBAgUXUACtOjEAhAgQIAAAQIECBAgQIAAAQIECBAgUCoBCdBSyYtLgAABAgQIECBAgAABAgQIECBAgEDRBSRAi04sAAECBAgQIECAAAECBAgQIECAAAECpRKQAC2VvLgECBAgQIAAAQIECBAgQIAAAQIECBRdQAK06MQCECBAgAABAgQIECBAgAABAgQIECBQKgEJ0FLJi0uAAAECBAgQIECAAAECBAgQIECAQNEFJECLTiwAAQIECBAgQIAAAQIECBAgQIAAAQKlEqgtVWBxCRAgQIAAAQIECBAgUG0C8xcsizvueTke/Ncb8errc2PVqlUxdsyg2Gn7kXHQfpvHwI0aqo3EeAkQIECAQNEFJECLTiwAAQIECBAgQIAAAQLVLrCopTV+fNE/47L/mRytbe3rcNz7jzfiymsfi151PePk928fp56yRwzo33udMp4QIECAAAECuQs4BT53OzUJECBAgAABAgQIECCwQYGXXpkbk469Mn728wffkvxcu3Lb8va49FeT45BjrojnXpi99iaPCRAgQIAAgTwEJEDzwFOVAAECBAgQIECAAAEC6xOYPmNRHHPitfHSK/PWV2ydba9PWbC6zutT5q+z3hMCBAgQIEAgNwEJ0Nzc1CJAgAABAgQIECBAgMB6BZLre37sc3+MmbMWr7dcRxvnzlsaH/nMjbFy5aqONltHgAABAgQIpBCQAE2BpSgBAgQIECBAgAABAgSyFfjjn5+LyY9Oy7b4W8o9+czMuO4PT75lvRUECBAgQIBAOgEJ0HReShMgQIAAAQIECBAgQCArgcuvfjircusrdPlVj6xvs20ECBAgQIBAFgISoFkgKUKAAAECBAgQIECAAIE0AvPmL42HHs796M81sR5/qjlmNLeseepfAgQIECBAIAcBCdAc0FQhQIAAAQIECBAgQIDA+gReeXVewa7fmdxF3kKAAAECBAjkLiABmrudmgQIECBAgAABAgQIEOhQYE7mJkaFWmbPWVKoprRDgAAB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i2LY0IHR0Nt17ipk2nSTAIE8BZKPENObWzJJ0Jaoq+0Rw4f3jcED++TZavVVnzptViSWozYeWn2DN2ICBAgQyFmgtbUt83d4Tgzo35T56ZtzO9VU0RGg1TTbxkqAAAECBAgQIECgAALJEaEjM0nP5MdCgAABAgQIECh3gQ1fxKfcR6B/BAgQIECAAAECBAgQIECAAAECBAgQ6ERAArQTGKsJECBAgAABAgQIECBAgAABAgQIEKh8AQnQyp9DIyBAgAABAgQIECBAgAABAgQIECBAoBMBCdBOYKwmQIAAAQIECBAgQIAAAQIECBAgQKDyBSRAK38OjYAAAQIECBAgQIAAAQIECBAgQIAAgU4EJEA7gbGaAAECBAgQIECAAAECBAgQIECAAIHKF5AArfw5NAICBAgQIECAAAECBAgQIECAAAECBDoRkADtBMZqAgQIECBAgAABAgQIECBAgAABAgQqX0ACtPLn0AgIECBAgAABAgQIECBAgAABAgQIEOhEQAK0ExirCRAgQIAAAQIECBAgQIAAAQIECBCofAEJ0MqfQyMgQIAAAQIECBAgQIAAAQIECBAgQKATAQnQTmCsJkCAAAECBAgQIECAAAECBAgQIECg8gUkQCt/Do2AAAECBAgQIECAAAECBAgQIECAAIFOBCRAO4GxmgABAgQIECBAgAABAgQIECBAgACByheQAK38OTQCAgQIECBAgAABAgQIECBAgAABAgQ6EZAA7QTGagIECBAgQIAAAQIECBAgQIAAAQIEKl+gZlVmqfxh5DeChODfDDXRo0dNfo2pTYAAAQJVJbDmb0hNTU0kPxYCBAgQIJCtwMqVK1cX7dHDcSnZmilHgAABArE6h5V8DvEZJPtXgwRo9lZKEiBAgAABAgQIECBAgAABAgQIECBQYQK+aqywCdNdAgQIECBAgAABAgQIECBAgAABAgSyF5AAzd5KSQIECBAgQIAAAQIECBAgQIAAAQIEKkxAArTCJkx3CRAgQIAAAQIECBAgQIAAAQIECBDIXkACNHsrJQkQIECAAAECBAgQIECAAAECBAgQqDABCdAKmzDdJUCAAAECBAgQIECAAAECBAgQIEAgewEJ0OytlCRAgAABAgQIECBAgAABAgQIECBAoMIEJEArbMJ0lwABAgQIECBAgAABAgQIECBAgACB7AUkQLO3UpIAAQIECBAgQIAAAQIECBAgQIAAgQoTkACtsAnTXQIECBAgQIAAAQIECBAgQIAAAQIEsheQAM3eSkkCBAgQIECAAAECBAgQIECAAAECBCpMQAK0wiZMdwkQIECAAAECBAgQIECAAAECBAgQyF5AAjR7KyUJECBAgAABAgQIECBAgAABAgQIEKgwAQnQCpsw3SVAgAABAgQIECBAgAABAgQIECBAIHsBCdDsrZQkQIAAAQIECBAgQIAAAQIECBAgQKDCBCRAK2zCdJcAAQIECBAgQIAAAQIECBAgQIAAgewFJECzt1KSAAECBAgQIECAAAECBAgQIECAAIEKE5AArbAJ010CBAgQIECAAAECBAgQIECAAAECBLIXkADN3kpJAgQIECBAgAABAgQIECBAgAABAgQqTEACtMImTHcJECBAgAABAgQIECBAgAABAgQIEMheQAI0eyslCRAgQIAAAQIECBAgQIAAAQIECBCoMAEJ0AqbMN0lQIAAAQIECBAgQIAAAQIECBAgQCB7AQnQ7K2UJECAAAECBAgQIECAAAECBAgQIECgwgQkQCtswnSXAAECBAgQIECAAAECBAgQIECAAIHsBSRAs7dSkgABAgQIECBAgAABAgQIECBAgACBChOQAK2wCdNdAgQIECBAgAABAgQIECBAgAABAgSyF5AAzd5KSQIECBAgQIAAAQIECBAgQIAAAQIEKkxAArTCJkx3CRAgQIAAAQIECBAgQIAAAQIECBDIXkACNHsrJQkQIECAAAECBAgQIECAAAECBAgQqDABCdAKmzDdJUCAAAECBAgQIECAAAECBAgQIEAgewEJ0OytlCRAgAABAgQIECBAgAABAgQIECBAoMIEJEArbMJ0lwABAgQIECBAgAABAgQIECBAgACB7AUkQLO3UpIAAQIECBAgQIAAAQIECBAgQIAAgQoTkACtsAnTXQIECBAgQIAAAQIECBAgQIAAAQIEsheQAM3eSkkCBAgQIECAAAECBAgQIECAAAECBCpMQAK0wiZMdwkQIECAAAECBAgQIECAAAECBAgQyF5AAjR7KyUJECBAgAABAgQIECBAgAABAgQIEKgwAQnQCpsw3SVAgAABAgQIECBAgAABAgQIECBAIHsBCdDsrZQkQIAAAQIECBAgQIAAAQIECBAgQKDCBCRAK2zCdJcAAQIECBAgQIAAAQIECBAgQIAAgewFJECzt1KSAAECBAgQIECAAAECBAgQIECAAIEKE5AArbAJ010CBAgQIECAAAECBAgQIECAAAECBLIXkADN3kpJAgQIECBAgAABAgQIECBAgAABAgQqTEACtMImTHcJECBAgAABAgQIECBAgAABAgQIEMheQAI0eyslCRAgQIAAAQIECBAgQIAAAQIECBCoMAEJ0AqbMN0lQIAAAQIECBAgQIAAAQIECBAgQCB7AQnQ7K2UJECAAAECBAgQIECAAAECBAgQIECgwgQkQCtswnSXAAECBAgQIECAAAECBAgQIECAAIHsBf4/E2lVCyxB3NIAAAAASUVORK5CYII=" alt="Soft labels learned during training. Continuous predictions capture graded trial-level responses rather than hard class assignments." width="100%" />
+<p class="caption">
+Soft labels learned during training. Continuous predictions capture
+graded trial-level responses rather than hard class assignments.
+</p>
+</div>
+<p>Soft labels can reveal:</p>
+<ul>
+<li><strong>Graded responses</strong>: Some trials are “more typical”
+than others</li>
+<li><strong>Learning effects</strong>: Early vs. late trials may
+differ</li>
+<li><strong>Attention lapses</strong>: Outlier trials with weak
+predictions</li>
+</ul>
+</div>
+<div id="complexity" class="section level2">
+<h2>Computational complexity</h2>
+<p>Each ALS iteration involves:</p>
+<ol style="list-style-type: decimal">
+<li><strong>Soft label update</strong>: O(N³) for N trials (Laplacian
+solve)</li>
+<li><strong>HRF update</strong>: O(K³) for K basis functions (typically
+K = 2-3)</li>
+<li><strong>Decoder update</strong>: O(V³) for V voxels (ridge
+regression)</li>
+</ol>
+<p><strong>Bottleneck</strong>: Decoder update when V is large
+(thousands of voxels).</p>
+<p><strong>Speedup strategies</strong>:</p>
+<ul>
+<li><strong>Prewhitening</strong>: Reduces effective dimensionality</li>
+<li><strong>Rank reduction</strong>: Automatic nuisance rank
+estimation</li>
+<li><strong>Sparse solvers</strong>: Exploit structure in design
+matrices</li>
+</ul>
+<p>Typical runtime: 1-5 seconds for 100 trials × 100 voxels on modern
+hardware.</p>
+</div>
+<div id="advanced" class="section level2">
+<h2>Advanced topics</h2>
+<div id="initialization" class="section level3">
+<h3>Custom initialization</h3>
+<p>The algorithm initializes:</p>
+<ul>
+<li><strong>y</strong>: Random normal or based on condition means</li>
+<li><strong>θ</strong>: Canonical HRF (1, 0, …)</li>
+<li><strong>W</strong>: Ridge regression on initial y</li>
+</ul>
+<p>Custom initialization (not currently exposed) could improve
+convergence for difficult cases.</p>
+</div>
+<div id="optimizers" class="section level3">
+<h3>Alternative optimizers</h3>
+<p>ALS is simple and stable but not always fastest. Alternatives:</p>
+<ul>
+<li><strong>Coordinate descent</strong>: Update each parameter
+sequentially</li>
+<li><strong>Gradient descent</strong>: First-order optimization</li>
+<li><strong>ADMM</strong>: Alternating direction method of
+multipliers</li>
+</ul>
+<p>Current implementation uses ALS for reliability and
+interpretability.</p>
+</div>
+</div>
+<div id="debugging" class="section level2">
+<h2>Debugging common issues</h2>
+<div id="poor-predictions" class="section level3">
+<h3>Issue: Poor predictions</h3>
+<p><strong>Symptoms</strong>: Random or below-chance accuracy</p>
+<p><strong>Possible causes</strong>:</p>
+<ol style="list-style-type: decimal">
+<li><strong>Over-regularization</strong>: Try decreasing
+<code>lambda_W</code></li>
+<li><strong>Wrong HRF</strong>: Try flexible HRF
+(<code>lambda_HRF = 0.001</code>)</li>
+<li><strong>Insufficient iterations</strong>: Increase
+<code>max_iter</code></li>
+<li><strong>Misspecified design</strong>: Check event model timing</li>
+</ol>
+</div>
+<div id="slow-convergence" class="section level3">
+<h3>Issue: Slow convergence</h3>
+<p><strong>Symptoms</strong>: Reaches <code>max_iter</code> without
+converging</p>
+<p><strong>Possible causes</strong>:</p>
+<ol style="list-style-type: decimal">
+<li><strong>Weak signal</strong>: Increase regularization</li>
+<li><strong>Conflicting constraints</strong>: Check lambda values</li>
+<li><strong>Poor scaling</strong>: Ensure data is standardized</li>
+</ol>
+</div>
+<div id="extreme-labels" class="section level3">
+<h3>Issue: Extreme soft labels</h3>
+<p><strong>Symptoms</strong>: <code>y_soft</code> values &gt;&gt; 1 in
+magnitude</p>
+<p><strong>Possible causes</strong>:</p>
+<ol style="list-style-type: decimal">
+<li><strong>Under-regularization</strong>: Increase
+<code>lambda_smooth</code></li>
+<li><strong>Overfitting</strong>: Increase <code>lambda_W</code></li>
+</ol>
+</div>
+</div>
+<div id="next-steps" class="section level2">
+<h2>Next steps</h2>
+<ul>
+<li><a href="01-getting-started.html">Getting Started</a> — Basic usage
+tutorial</li>
+<li><a href="02-ar-prewhitening.html">AR Prewhitening</a> — Handle
+temporal autocorrelation</li>
+<li><a href="03-rmvpa-integration.html">rMVPA Integration</a> —
+Cross-validation framework</li>
+<li><a href="04-hrf-estimation.html">HRF Estimation</a> — Joint HRF
+learning</li>
+</ul>
+</div>
+<div id="session-info" class="section level2">
+<h2>Session info</h2>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a>sessioninfo<span class="sc">::</span><span class="fu">session_info</span>(<span class="at">pkgs =</span> <span class="st">&quot;hrfdecode&quot;</span>)</span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a><span class="co">#&gt; ─ Session info ───────────────────────────────────────────────────────────────</span></span>
+<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a><span class="co">#&gt;  setting  value</span></span>
+<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a><span class="co">#&gt;  version  R version 4.5.1 (2025-06-13)</span></span>
+<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a><span class="co">#&gt;  os       macOS Sonoma 14.3</span></span>
+<span id="cb10-6"><a href="#cb10-6" tabindex="-1"></a><span class="co">#&gt;  system   aarch64, darwin20</span></span>
+<span id="cb10-7"><a href="#cb10-7" tabindex="-1"></a><span class="co">#&gt;  ui       X11</span></span>
+<span id="cb10-8"><a href="#cb10-8" tabindex="-1"></a><span class="co">#&gt;  language (EN)</span></span>
+<span id="cb10-9"><a href="#cb10-9" tabindex="-1"></a><span class="co">#&gt;  collate  en_CA</span></span>
+<span id="cb10-10"><a href="#cb10-10" tabindex="-1"></a><span class="co">#&gt;  ctype    en_CA</span></span>
+<span id="cb10-11"><a href="#cb10-11" tabindex="-1"></a><span class="co">#&gt;  tz       America/Toronto</span></span>
+<span id="cb10-12"><a href="#cb10-12" tabindex="-1"></a><span class="co">#&gt;  date     2025-11-10</span></span>
+<span id="cb10-13"><a href="#cb10-13" tabindex="-1"></a><span class="co">#&gt;  pandoc   3.7.0.2 @ /opt/homebrew/bin/ (via rmarkdown)</span></span>
+<span id="cb10-14"><a href="#cb10-14" tabindex="-1"></a><span class="co">#&gt;  quarto   1.7.32 @ /usr/local/bin/quarto</span></span>
+<span id="cb10-15"><a href="#cb10-15" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb10-16"><a href="#cb10-16" tabindex="-1"></a><span class="co">#&gt; ─ Packages ───────────────────────────────────────────────────────────────────</span></span>
+<span id="cb10-17"><a href="#cb10-17" tabindex="-1"></a><span class="co">#&gt;  package        * version    date (UTC) lib source</span></span>
+<span id="cb10-18"><a href="#cb10-18" tabindex="-1"></a><span class="co">#&gt;  askpass          1.2.1      2024-10-04 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-19"><a href="#cb10-19" tabindex="-1"></a><span class="co">#&gt;  assertthat       0.2.1      2019-03-21 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-20"><a href="#cb10-20" tabindex="-1"></a><span class="co">#&gt;  backports        1.5.0      2024-05-23 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-21"><a href="#cb10-21" tabindex="-1"></a><span class="co">#&gt;  base64enc        0.1-3      2015-07-28 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-22"><a href="#cb10-22" tabindex="-1"></a><span class="co">#&gt;  bdsmatrix        1.3-7      2024-03-02 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-23"><a href="#cb10-23" tabindex="-1"></a><span class="co">#&gt;  bigassertr       0.1.7      2025-06-27 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-24"><a href="#cb10-24" tabindex="-1"></a><span class="co">#&gt;  bigparallelr     0.3.2      2021-10-02 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-25"><a href="#cb10-25" tabindex="-1"></a><span class="co">#&gt;  bigstatsr        1.6.2      2025-07-29 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-26"><a href="#cb10-26" tabindex="-1"></a><span class="co">#&gt;  bit              4.6.0      2025-03-06 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-27"><a href="#cb10-27" tabindex="-1"></a><span class="co">#&gt;  bit64            4.6.0-1    2025-01-16 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-28"><a href="#cb10-28" tabindex="-1"></a><span class="co">#&gt;  bitops           1.0-9      2024-10-03 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-29"><a href="#cb10-29" tabindex="-1"></a><span class="co">#&gt;  broom            1.0.10     2025-09-13 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-30"><a href="#cb10-30" tabindex="-1"></a><span class="co">#&gt;  bslib            0.9.0      2025-01-30 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-31"><a href="#cb10-31" tabindex="-1"></a><span class="co">#&gt;  cachem           1.1.0      2024-05-16 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-32"><a href="#cb10-32" tabindex="-1"></a><span class="co">#&gt;  caTools          1.18.3     2024-09-04 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-33"><a href="#cb10-33" tabindex="-1"></a><span class="co">#&gt;  cli              3.6.5      2025-04-23 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-34"><a href="#cb10-34" tabindex="-1"></a><span class="co">#&gt;  clipr            0.8.0      2022-02-22 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-35"><a href="#cb10-35" tabindex="-1"></a><span class="co">#&gt;  codetools        0.2-20     2024-03-31 [2] CRAN (R 4.5.1)</span></span>
+<span id="cb10-36"><a href="#cb10-36" tabindex="-1"></a><span class="co">#&gt;  colorplane       0.5.0      2025-11-02 [1] Github (bbuchsbaum/colorplane@1b7a26f)</span></span>
+<span id="cb10-37"><a href="#cb10-37" tabindex="-1"></a><span class="co">#&gt;  corpcor          1.6.10     2021-09-16 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-38"><a href="#cb10-38" tabindex="-1"></a><span class="co">#&gt;  cowplot          1.2.0      2025-07-07 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-39"><a href="#cb10-39" tabindex="-1"></a><span class="co">#&gt;  cpp11            0.5.2      2025-03-03 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-40"><a href="#cb10-40" tabindex="-1"></a><span class="co">#&gt;  crayon           1.5.3      2024-06-20 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-41"><a href="#cb10-41" tabindex="-1"></a><span class="co">#&gt;  crosstalk        1.2.2      2025-08-26 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-42"><a href="#cb10-42" tabindex="-1"></a><span class="co">#&gt;  curl             7.0.0      2025-08-19 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-43"><a href="#cb10-43" tabindex="-1"></a><span class="co">#&gt;  data.table       1.17.8     2025-07-10 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-44"><a href="#cb10-44" tabindex="-1"></a><span class="co">#&gt;  dbscan           1.2.3      2025-08-20 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-45"><a href="#cb10-45" tabindex="-1"></a><span class="co">#&gt;  deflist          0.2.0      2023-04-27 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-46"><a href="#cb10-46" tabindex="-1"></a><span class="co">#&gt;  DEoptimR         1.1-4      2025-07-27 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-47"><a href="#cb10-47" tabindex="-1"></a><span class="co">#&gt;  digest           0.6.37     2024-08-19 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-48"><a href="#cb10-48" tabindex="-1"></a><span class="co">#&gt;  doParallel       1.0.17     2022-02-07 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-49"><a href="#cb10-49" tabindex="-1"></a><span class="co">#&gt;  dplyr            1.1.4      2023-11-17 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-50"><a href="#cb10-50" tabindex="-1"></a><span class="co">#&gt;  entropy          1.3.2      2025-04-07 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-51"><a href="#cb10-51" tabindex="-1"></a><span class="co">#&gt;  evaluate         1.0.5      2025-08-27 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-52"><a href="#cb10-52" tabindex="-1"></a><span class="co">#&gt;  farver           2.1.2      2024-05-13 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-53"><a href="#cb10-53" tabindex="-1"></a><span class="co">#&gt;  fastmap          1.2.0      2024-05-15 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-54"><a href="#cb10-54" tabindex="-1"></a><span class="co">#&gt;  fdrtool          1.2.18     2024-08-20 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-55"><a href="#cb10-55" tabindex="-1"></a><span class="co">#&gt;  ff               4.5.2      2025-01-13 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-56"><a href="#cb10-56" tabindex="-1"></a><span class="co">#&gt;  ffmanova         1.1.2      2023-10-18 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-57"><a href="#cb10-57" tabindex="-1"></a><span class="co">#&gt;  filenamer        0.3        2025-04-09 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-58"><a href="#cb10-58" tabindex="-1"></a><span class="co">#&gt;  flock            0.7        2016-11-12 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-59"><a href="#cb10-59" tabindex="-1"></a><span class="co">#&gt;  fmriAR           0.1.0      2025-10-18 [1] Github (bbuchsbaum/fmriAR@0b10352)</span></span>
+<span id="cb10-60"><a href="#cb10-60" tabindex="-1"></a><span class="co">#&gt;  fmridesign     * 0.5.0      2025-11-10 [1] Github (bbuchsbaum/fmridesign@9af622f)</span></span>
+<span id="cb10-61"><a href="#cb10-61" tabindex="-1"></a><span class="co">#&gt;  fmrihrf          0.1.0.9000 2025-11-01 [1] Github (bbuchsbaum/fmrihrf@708058f)</span></span>
+<span id="cb10-62"><a href="#cb10-62" tabindex="-1"></a><span class="co">#&gt;  FNN              1.1.4.1    2024-09-22 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-63"><a href="#cb10-63" tabindex="-1"></a><span class="co">#&gt;  fontawesome      0.5.3      2024-11-16 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-64"><a href="#cb10-64" tabindex="-1"></a><span class="co">#&gt;  foreach          1.5.2      2022-02-02 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-65"><a href="#cb10-65" tabindex="-1"></a><span class="co">#&gt;  formatR          1.14       2023-01-17 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-66"><a href="#cb10-66" tabindex="-1"></a><span class="co">#&gt;  fs               1.6.6      2025-04-12 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-67"><a href="#cb10-67" tabindex="-1"></a><span class="co">#&gt;  furrr            0.3.1      2022-08-15 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-68"><a href="#cb10-68" tabindex="-1"></a><span class="co">#&gt;  futile.logger    1.4.3      2016-07-10 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-69"><a href="#cb10-69" tabindex="-1"></a><span class="co">#&gt;  futile.options   1.0.1      2018-04-20 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-70"><a href="#cb10-70" tabindex="-1"></a><span class="co">#&gt;  future           1.67.0     2025-07-29 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-71"><a href="#cb10-71" tabindex="-1"></a><span class="co">#&gt;  future.apply     1.20.0     2025-06-06 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-72"><a href="#cb10-72" tabindex="-1"></a><span class="co">#&gt;  generics         0.1.4      2025-05-09 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-73"><a href="#cb10-73" tabindex="-1"></a><span class="co">#&gt;  ggplot2        * 4.0.0      2025-09-11 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-74"><a href="#cb10-74" tabindex="-1"></a><span class="co">#&gt;  gifti            0.8.0      2020-11-11 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-75"><a href="#cb10-75" tabindex="-1"></a><span class="co">#&gt;  glmnet           4.1-10     2025-07-17 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-76"><a href="#cb10-76" tabindex="-1"></a><span class="co">#&gt;  globals          0.18.0     2025-05-08 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-77"><a href="#cb10-77" tabindex="-1"></a><span class="co">#&gt;  glue             1.8.0      2024-09-30 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-78"><a href="#cb10-78" tabindex="-1"></a><span class="co">#&gt;  gplots           3.2.0      2024-10-05 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-79"><a href="#cb10-79" tabindex="-1"></a><span class="co">#&gt;  gtable           0.3.6      2024-10-25 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-80"><a href="#cb10-80" tabindex="-1"></a><span class="co">#&gt;  gtools           3.9.5      2023-11-20 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-81"><a href="#cb10-81" tabindex="-1"></a><span class="co">#&gt;  hardhat          1.4.2      2025-08-20 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-82"><a href="#cb10-82" tabindex="-1"></a><span class="co">#&gt;  highr            0.11       2024-05-26 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-83"><a href="#cb10-83" tabindex="-1"></a><span class="co">#&gt;  hms              1.1.4      2025-10-17 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-84"><a href="#cb10-84" tabindex="-1"></a><span class="co">#&gt;  hrfdecode      * 0.2.0      2025-11-10 [1] local</span></span>
+<span id="cb10-85"><a href="#cb10-85" tabindex="-1"></a><span class="co">#&gt;  htmltools        0.5.8.1    2024-04-04 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-86"><a href="#cb10-86" tabindex="-1"></a><span class="co">#&gt;  htmlwidgets      1.6.4      2023-12-06 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-87"><a href="#cb10-87" tabindex="-1"></a><span class="co">#&gt;  httr             1.4.7      2023-08-15 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-88"><a href="#cb10-88" tabindex="-1"></a><span class="co">#&gt;  igraph           2.2.1      2025-10-27 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-89"><a href="#cb10-89" tabindex="-1"></a><span class="co">#&gt;  io               0.3.2      2019-12-17 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-90"><a href="#cb10-90" tabindex="-1"></a><span class="co">#&gt;  isoband          0.2.7      2022-12-20 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-91"><a href="#cb10-91" tabindex="-1"></a><span class="co">#&gt;  iterators        1.0.14     2022-02-05 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-92"><a href="#cb10-92" tabindex="-1"></a><span class="co">#&gt;  jquerylib        0.1.4      2021-04-26 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-93"><a href="#cb10-93" tabindex="-1"></a><span class="co">#&gt;  jsonlite         2.0.0      2025-03-27 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-94"><a href="#cb10-94" tabindex="-1"></a><span class="co">#&gt;  KernSmooth       2.23-26    2025-01-01 [2] CRAN (R 4.5.1)</span></span>
+<span id="cb10-95"><a href="#cb10-95" tabindex="-1"></a><span class="co">#&gt;  knitr            1.50       2025-03-16 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-96"><a href="#cb10-96" tabindex="-1"></a><span class="co">#&gt;  labeling         0.4.3      2023-08-29 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-97"><a href="#cb10-97" tabindex="-1"></a><span class="co">#&gt;  lambda.r         1.2.4      2019-09-18 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-98"><a href="#cb10-98" tabindex="-1"></a><span class="co">#&gt;  later            1.4.4      2025-08-27 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-99"><a href="#cb10-99" tabindex="-1"></a><span class="co">#&gt;  lattice          0.22-7     2025-04-02 [2] CRAN (R 4.5.1)</span></span>
+<span id="cb10-100"><a href="#cb10-100" tabindex="-1"></a><span class="co">#&gt;  lazyeval         0.2.2      2019-03-15 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-101"><a href="#cb10-101" tabindex="-1"></a><span class="co">#&gt;  lifecycle        1.0.4      2023-11-07 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-102"><a href="#cb10-102" tabindex="-1"></a><span class="co">#&gt;  listenv          0.10.0     2025-11-02 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-103"><a href="#cb10-103" tabindex="-1"></a><span class="co">#&gt;  magrittr         2.0.4      2025-09-12 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-104"><a href="#cb10-104" tabindex="-1"></a><span class="co">#&gt;  MASS             7.3-65     2025-02-28 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-105"><a href="#cb10-105" tabindex="-1"></a><span class="co">#&gt;  Matrix           1.7-3      2025-03-11 [2] CRAN (R 4.5.1)</span></span>
+<span id="cb10-106"><a href="#cb10-106" tabindex="-1"></a><span class="co">#&gt;  matrixStats      1.5.0      2025-01-07 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-107"><a href="#cb10-107" tabindex="-1"></a><span class="co">#&gt;  memoise          2.0.1      2021-11-26 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-108"><a href="#cb10-108" tabindex="-1"></a><span class="co">#&gt;  mime             0.13       2025-03-17 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-109"><a href="#cb10-109" tabindex="-1"></a><span class="co">#&gt;  mmap             0.6-22     2023-12-08 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-110"><a href="#cb10-110" tabindex="-1"></a><span class="co">#&gt;  modelr           0.1.11     2023-03-22 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-111"><a href="#cb10-111" tabindex="-1"></a><span class="co">#&gt;  mvtnorm          1.3-3      2025-01-10 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-112"><a href="#cb10-112" tabindex="-1"></a><span class="co">#&gt;  neuroim2         0.8.3      2025-11-07 [1] Github (bbuchsbaum/neuroim2@77cd9c4)</span></span>
+<span id="cb10-113"><a href="#cb10-113" tabindex="-1"></a><span class="co">#&gt;  neurosurf        0.1.0      2025-11-02 [1] Github (bbuchsbaum/neurosurf@5af7de2)</span></span>
+<span id="cb10-114"><a href="#cb10-114" tabindex="-1"></a><span class="co">#&gt;  numDeriv         2016.8-1.1 2019-06-06 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-115"><a href="#cb10-115" tabindex="-1"></a><span class="co">#&gt;  openssl          2.3.4      2025-09-30 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-116"><a href="#cb10-116" tabindex="-1"></a><span class="co">#&gt;  otel             0.2.0      2025-08-29 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-117"><a href="#cb10-117" tabindex="-1"></a><span class="co">#&gt;  parallelly       1.45.1     2025-07-24 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-118"><a href="#cb10-118" tabindex="-1"></a><span class="co">#&gt;  pillar           1.11.1     2025-09-17 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-119"><a href="#cb10-119" tabindex="-1"></a><span class="co">#&gt;  pkgconfig        2.0.3      2019-09-22 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-120"><a href="#cb10-120" tabindex="-1"></a><span class="co">#&gt;  plotly           4.11.0     2025-06-19 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-121"><a href="#cb10-121" tabindex="-1"></a><span class="co">#&gt;  pls              2.8-5      2024-09-15 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-122"><a href="#cb10-122" tabindex="-1"></a><span class="co">#&gt;  plyr             1.8.9      2023-10-02 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-123"><a href="#cb10-123" tabindex="-1"></a><span class="co">#&gt;  pracma           2.4.6      2025-10-22 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-124"><a href="#cb10-124" tabindex="-1"></a><span class="co">#&gt;  prettyunits      1.2.0      2023-09-24 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-125"><a href="#cb10-125" tabindex="-1"></a><span class="co">#&gt;  progress         1.2.3      2023-12-06 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-126"><a href="#cb10-126" tabindex="-1"></a><span class="co">#&gt;  promises         1.5.0      2025-11-01 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-127"><a href="#cb10-127" tabindex="-1"></a><span class="co">#&gt;  proxy            0.4-27     2022-06-09 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-128"><a href="#cb10-128" tabindex="-1"></a><span class="co">#&gt;  ps               1.9.1      2025-04-12 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-129"><a href="#cb10-129" tabindex="-1"></a><span class="co">#&gt;  purrr            1.2.0      2025-11-04 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-130"><a href="#cb10-130" tabindex="-1"></a><span class="co">#&gt;  R.methodsS3      1.8.2      2022-06-13 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-131"><a href="#cb10-131" tabindex="-1"></a><span class="co">#&gt;  R.oo             1.27.1     2025-05-02 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-132"><a href="#cb10-132" tabindex="-1"></a><span class="co">#&gt;  R.utils          2.13.0     2025-02-24 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-133"><a href="#cb10-133" tabindex="-1"></a><span class="co">#&gt;  R6               2.6.1      2025-02-15 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-134"><a href="#cb10-134" tabindex="-1"></a><span class="co">#&gt;  rappdirs         0.3.3      2021-01-31 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-135"><a href="#cb10-135" tabindex="-1"></a><span class="co">#&gt;  RColorBrewer     1.1-3      2022-04-03 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-136"><a href="#cb10-136" tabindex="-1"></a><span class="co">#&gt;  Rcpp             1.1.0      2025-07-02 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-137"><a href="#cb10-137" tabindex="-1"></a><span class="co">#&gt;  RcppArmadillo    15.0.2-2   2025-09-19 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-138"><a href="#cb10-138" tabindex="-1"></a><span class="co">#&gt;  RcppEigen        0.3.4.0.2  2024-08-24 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-139"><a href="#cb10-139" tabindex="-1"></a><span class="co">#&gt;  RcppParallel     5.1.11-1   2025-08-27 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-140"><a href="#cb10-140" tabindex="-1"></a><span class="co">#&gt;  readr            2.1.5      2024-01-10 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-141"><a href="#cb10-141" tabindex="-1"></a><span class="co">#&gt;  Rfit             0.27.0     2024-05-25 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-142"><a href="#cb10-142" tabindex="-1"></a><span class="co">#&gt;  rgl              1.3.24     2025-06-25 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-143"><a href="#cb10-143" tabindex="-1"></a><span class="co">#&gt;  RhpcBLASctl      0.23-42    2023-02-11 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-144"><a href="#cb10-144" tabindex="-1"></a><span class="co">#&gt;  rlang            1.1.6      2025-04-11 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-145"><a href="#cb10-145" tabindex="-1"></a><span class="co">#&gt;  rmarkdown        2.30       2025-09-28 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-146"><a href="#cb10-146" tabindex="-1"></a><span class="co">#&gt;  rmio             0.4.0      2022-02-17 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-147"><a href="#cb10-147" tabindex="-1"></a><span class="co">#&gt;  rMVPA            0.1.2      2025-11-10 [1] Github (bbuchsbaum/rMVPA@8858610)</span></span>
+<span id="cb10-148"><a href="#cb10-148" tabindex="-1"></a><span class="co">#&gt;  RNifti           1.8.0      2025-02-22 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-149"><a href="#cb10-149" tabindex="-1"></a><span class="co">#&gt;  RNiftyReg        2.8.4      2024-09-30 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-150"><a href="#cb10-150" tabindex="-1"></a><span class="co">#&gt;  robustbase       0.99-6     2025-09-04 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-151"><a href="#cb10-151" tabindex="-1"></a><span class="co">#&gt;  rsample          1.3.1      2025-07-29 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-152"><a href="#cb10-152" tabindex="-1"></a><span class="co">#&gt;  RSpectra         0.16-2     2024-07-18 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-153"><a href="#cb10-153" tabindex="-1"></a><span class="co">#&gt;  Rvcg             0.25       2025-03-14 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-154"><a href="#cb10-154" tabindex="-1"></a><span class="co">#&gt;  S7               0.2.0      2024-11-07 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-155"><a href="#cb10-155" tabindex="-1"></a><span class="co">#&gt;  sass             0.4.10     2025-04-11 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-156"><a href="#cb10-156" tabindex="-1"></a><span class="co">#&gt;  scales           1.4.0      2025-04-24 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-157"><a href="#cb10-157" tabindex="-1"></a><span class="co">#&gt;  sda              1.3.9      2025-04-08 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-158"><a href="#cb10-158" tabindex="-1"></a><span class="co">#&gt;  shape            1.4.6.1    2024-02-23 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-159"><a href="#cb10-159" tabindex="-1"></a><span class="co">#&gt;  slider           0.3.2      2024-10-25 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-160"><a href="#cb10-160" tabindex="-1"></a><span class="co">#&gt;  sparsediscrim    0.3.0      2021-07-01 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-161"><a href="#cb10-161" tabindex="-1"></a><span class="co">#&gt;  sparsevctrs      0.3.4      2025-05-25 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-162"><a href="#cb10-162" tabindex="-1"></a><span class="co">#&gt;  stringi          1.8.7      2025-03-27 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-163"><a href="#cb10-163" tabindex="-1"></a><span class="co">#&gt;  stringr          1.6.0      2025-11-04 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-164"><a href="#cb10-164" tabindex="-1"></a><span class="co">#&gt;  survival         3.8-3      2024-12-17 [2] CRAN (R 4.5.1)</span></span>
+<span id="cb10-165"><a href="#cb10-165" tabindex="-1"></a><span class="co">#&gt;  sys              3.4.3      2024-10-04 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-166"><a href="#cb10-166" tabindex="-1"></a><span class="co">#&gt;  tibble           3.3.0      2025-06-08 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-167"><a href="#cb10-167" tabindex="-1"></a><span class="co">#&gt;  tidyr            1.3.1      2024-01-24 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-168"><a href="#cb10-168" tabindex="-1"></a><span class="co">#&gt;  tidyselect       1.2.1      2024-03-11 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-169"><a href="#cb10-169" tabindex="-1"></a><span class="co">#&gt;  tinytex          0.57       2025-04-15 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-170"><a href="#cb10-170" tabindex="-1"></a><span class="co">#&gt;  tzdb             0.5.0      2025-03-15 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-171"><a href="#cb10-171" tabindex="-1"></a><span class="co">#&gt;  utf8             1.2.6      2025-06-08 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-172"><a href="#cb10-172" tabindex="-1"></a><span class="co">#&gt;  vctrs            0.6.5      2023-12-01 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-173"><a href="#cb10-173" tabindex="-1"></a><span class="co">#&gt;  viridisLite      0.4.2      2023-05-02 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-174"><a href="#cb10-174" tabindex="-1"></a><span class="co">#&gt;  vroom            1.6.6      2025-09-19 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-175"><a href="#cb10-175" tabindex="-1"></a><span class="co">#&gt;  warp             0.2.1      2023-11-02 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-176"><a href="#cb10-176" tabindex="-1"></a><span class="co">#&gt;  whitening        1.4.0      2022-06-07 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-177"><a href="#cb10-177" tabindex="-1"></a><span class="co">#&gt;  withr            3.0.2      2024-10-28 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-178"><a href="#cb10-178" tabindex="-1"></a><span class="co">#&gt;  xfun             0.54       2025-10-30 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-179"><a href="#cb10-179" tabindex="-1"></a><span class="co">#&gt;  xml2             1.4.1      2025-10-27 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-180"><a href="#cb10-180" tabindex="-1"></a><span class="co">#&gt;  yaml             2.3.10     2024-07-26 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-181"><a href="#cb10-181" tabindex="-1"></a><span class="co">#&gt;  yardstick        1.3.2      2025-01-22 [1] CRAN (R 4.5.0)</span></span>
+<span id="cb10-182"><a href="#cb10-182" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb10-183"><a href="#cb10-183" tabindex="-1"></a><span class="co">#&gt;  [1] /Users/bbuchsbaum/Library/R/arm64/4.5/library</span></span>
+<span id="cb10-184"><a href="#cb10-184" tabindex="-1"></a><span class="co">#&gt;  [2] /Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/library</span></span>
+<span id="cb10-185"><a href="#cb10-185" tabindex="-1"></a><span class="co">#&gt;  * ── Packages attached to the search path.</span></span>
+<span id="cb10-186"><a href="#cb10-186" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb10-187"><a href="#cb10-187" tabindex="-1"></a><span class="co">#&gt; ──────────────────────────────────────────────────────────────────────────────</span></span></code></pre></div>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

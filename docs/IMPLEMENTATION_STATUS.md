@@ -23,16 +23,21 @@ now **removed** and the tests are **active**.
 ### ✅ Implemented Features
 
 1.  **AR Prewhitening Pipeline** - Fully functional
-    - Location: [R/fit.R](R/fit.R) lines 48-73
+    - Location:
+      [R/fit.R](https://bbuchsbaum.github.io/hrfdecoder/R/fit.R) lines
+      48-73
     - Integrated between baseline residualization and standardization
     - Uses fmriAR for estimation and whitening
 2.  **Test Data Application** - Fully functional
-    - Location: [R/predict.R](R/predict.R) lines 23-33
+    - Location:
+      [R/predict.R](https://bbuchsbaum.github.io/hrfdecoder/R/predict.R)
+      lines 23-33
     - Stored AR plan automatically applied to test data
     - Helper function extracts run IDs from test event models
 3.  **rMVPA Integration** - Fully functional
-    - Location: [R/hrfdecoder_model.R](R/hrfdecoder_model.R) lines
-      16-18, 75-77
+    - Location:
+      [R/hrfdecoder_model.R](https://bbuchsbaum.github.io/hrfdecoder/R/hrfdecoder_model.R)
+      lines 16-18, 75-77
     - AR parameters passed through model spec
     - Default `ar_order = 1` for rMVPA usage
 4.  **Dependencies** - Added
@@ -40,18 +45,19 @@ now **removed** and the tests are **active**.
     - Functions imported: `fit_noise`, `whiten_apply`
 5.  **Tests** - Active (skip guards removed)
     - File:
-      [tests/testthat/test-ar-prewhitening.R](tests/testthat/test-ar-prewhitening.R)
+      [tests/testthat/test-ar-prewhitening.R](https://bbuchsbaum.github.io/hrfdecoder/tests/testthat/test-ar-prewhitening.R)
     - 6 comprehensive test cases
     - All tests now run (no skip guards)
 6.  **Documentation** - Complete
     - Roxygen docs updated in all modified files
     - Integration plan:
-      [AR_PREWHITENING_INTEGRATION_PLAN.md](AR_PREWHITENING_INTEGRATION_PLAN.md)
+      [AR_PREWHITENING_INTEGRATION_PLAN.md](https://bbuchsbaum.github.io/hrfdecoder/AR_PREWHITENING_INTEGRATION_PLAN.md)
     - Implementation summary:
-      [AR_IMPLEMENTATION_SUMMARY.md](AR_IMPLEMENTATION_SUMMARY.md)
+      [AR_IMPLEMENTATION_SUMMARY.md](https://bbuchsbaum.github.io/hrfdecoder/AR_IMPLEMENTATION_SUMMARY.md)
     - Working examples:
-      [examples/ar_prewhitening_example.R](examples/ar_prewhitening_example.R)
-    - Changelog: [CHANGELOG.md](CHANGELOG.md)
+      [examples/ar_prewhitening_example.R](https://bbuchsbaum.github.io/hrfdecoder/examples/ar_prewhitening_example.R)
+    - Changelog:
+      [CHANGELOG.md](https://bbuchsbaum.github.io/hrfdecoder/CHANGELOG.md)
 
 ------------------------------------------------------------------------
 
@@ -81,7 +87,7 @@ The discussion you referenced said:
 **That was true when written**, but now:
 
 - ✅ AR prewhitening logic **exists** in
-  [`fit_hrfdecoder()`](reference/fit_hrfdecoder.md)
+  [`fit_hrfdecoder()`](https://bbuchsbaum.github.io/hrfdecoder/reference/fit_hrfdecoder.md)
 - ✅ fmriAR APIs **are threaded through** the codebase
 - ✅ AR plan **is stored** in fit objects
 - ✅ Prediction **applies AR** automatically
@@ -191,11 +197,12 @@ fmrihrf are installed)
 
 4.  **Read the documentation**:
 
-    - [AR_PREWHITENING_INTEGRATION_PLAN.md](AR_PREWHITENING_INTEGRATION_PLAN.md) -
+    - [AR_PREWHITENING_INTEGRATION_PLAN.md](https://bbuchsbaum.github.io/hrfdecoder/AR_PREWHITENING_INTEGRATION_PLAN.md) -
       Design & rationale
-    - [AR_IMPLEMENTATION_SUMMARY.md](AR_IMPLEMENTATION_SUMMARY.md) -
+    - [AR_IMPLEMENTATION_SUMMARY.md](https://bbuchsbaum.github.io/hrfdecoder/AR_IMPLEMENTATION_SUMMARY.md) -
       Usage guide
-    - [CHANGELOG.md](CHANGELOG.md) - What changed
+    - [CHANGELOG.md](https://bbuchsbaum.github.io/hrfdecoder/CHANGELOG.md) -
+      What changed
 
 ------------------------------------------------------------------------
 

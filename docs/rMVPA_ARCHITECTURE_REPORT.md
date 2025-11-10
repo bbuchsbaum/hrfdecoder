@@ -513,8 +513,8 @@ parameters.
 |----|----|----|
 | `allgeneric.R` | Generic function definitions | `train_model`, `predict_model`, `format_result`, `merge_results`, `process_roi` |
 | `mvpa_model.R` | Standard MVPA model spec | [`mvpa_model()`](http://bbuchsbaum.github.io/rMVPA/reference/mvpa_model.md), `create_model_spec()`, S3 methods |
-| `hrfdecoder_model.R` | hrfdecoder adapter | [`hrfdecoder_model()`](reference/hrfdecoder_model.md), `train_model.hrfdecoder_model()`, `format_result.hrfdecoder_model()` |
-| `hrfdecoder_design.R` | hrfdecoder design extension | [`hrfdecoder_design()`](http://bbuchsbaum.github.io/rMVPA/reference/hrfdecoder_design.md), validation, metadata attachment |
+| `hrfdecoder_model.R` | hrfdecoder adapter | [`hrfdecoder_model()`](https://bbuchsbaum.github.io/hrfdecoder/reference/hrfdecoder_model.md), `train_model.hrfdecoder_model()`, `format_result.hrfdecoder_model()` |
+| `hrfdecoder_design.R` | hrfdecoder design extension | `hrfdecoder_design()`, validation, metadata attachment |
 | `mvpa_iterate.R` | CV iteration logic | `internal_crossval()`, `external_crossval()`, fold generation |
 | `crossval.R` | CV specification classes | [`blocked_cross_validation()`](http://bbuchsbaum.github.io/rMVPA/reference/cross_validation.md), [`crossval_samples()`](http://bbuchsbaum.github.io/rMVPA/reference/crossval_samples.md) |
 | `model_fit.R` | Model tuning utilities | `tune_model()`, caret integration |
@@ -542,12 +542,14 @@ Validate that prewhitening happens before fold creation (no data
 leakage)
 
 Document AR parameter control in
-[`hrfdecoder_model()`](reference/hrfdecoder_model.md) signature
+[`hrfdecoder_model()`](https://bbuchsbaum.github.io/hrfdecoder/reference/hrfdecoder_model.md)
+signature
 
 Test with cross-validation to ensure train/test independence
 
 Add `ar_order` parameter to
-[`hrfdecoder_model()`](reference/hrfdecoder_model.md) spec
+[`hrfdecoder_model()`](https://bbuchsbaum.github.io/hrfdecoder/reference/hrfdecoder_model.md)
+spec
 
 Consider model-agnostic interface for other preprocessing (nuisance
 regression, etc.)

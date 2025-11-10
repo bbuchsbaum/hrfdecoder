@@ -78,7 +78,7 @@ if (requireNamespace("ggplot2", quietly = TRUE)) {
 
   ggplot(plot_df, aes(x = time, y = amplitude, color = component)) +
     geom_line(linewidth = 1.2) +
-    hrfdecode::scale_color_albers() +
+    (if (requireNamespace("albersdown", quietly = TRUE)) albersdown::scale_color_albers(params$family) else ggplot2::scale_color_discrete()) +
     labs(
       title = "SPM HRF basis functions",
       subtitle = "Canonical + temporal derivative allow flexible HRF shapes",
@@ -202,12 +202,24 @@ fit_hrf <- fit_hrfdecoder(
   hrf = fmrihrf::getHRF("spmg2"),
   lambda_W = 0.1,
   lambda_HRF = 0.01,
+  theta_penalty = 1e-4,   # lighter shrinkage on HRF coefficients
+  standardize = FALSE,    # keep amplitude scale for clearer HRF recovery
   verbose = FALSE
 )
 
 # Extract learned HRF
 theta_learned <- fit_hrf$theta
 hrf_learned <- hrf_basis %*% theta_learned
+hrf_learned_tr <- as.numeric(hrf_basis_tr %*% theta_learned)
+
+# Report shape similarity (scale-invariant) and a scale-aligned error
+alpha <- as.numeric(crossprod(hrf_learned_tr, hrf_shifted_tr) / crossprod(hrf_learned_tr))
+shape_corr <- suppressWarnings(cor(as.numeric(hrf_learned_tr), as.numeric(hrf_shifted_tr)))
+mse_aligned <- mean((as.numeric(alpha * hrf_learned_tr) - as.numeric(hrf_shifted_tr))^2)
+cat(sprintf("Shape correlation (learned vs true): %.3f\n", shape_corr))
+#> Shape correlation (learned vs true): 0.984
+cat(sprintf("MSE after optimal scaling: %.4f\n", mse_aligned))
+#> MSE after optimal scaling: 0.0116
 ```
 
 Compare learned vs. true HRF:
@@ -237,7 +249,7 @@ if (requireNamespace("ggplot2", quietly = TRUE)) {
   ggplot(plot_df, aes(x = time, y = amplitude, color = type, linetype = type)) +
     geom_line(linewidth = 1.2) +
     scale_linetype_manual(values = c("Canonical" = "dashed", "Learned" = "solid", "True (shifted)" = "solid")) +
-    hrfdecode::scale_color_albers() +
+    (if (requireNamespace("albersdown", quietly = TRUE)) albersdown::scale_color_albers(params$family) else ggplot2::scale_color_discrete()) +
     labs(
       title = "HRF estimation from simulated data",
       subtitle = "Joint estimation recovers the true delayed-peak HRF",
@@ -283,8 +295,8 @@ for (v in 1:n_voxels) {
 }
 
 # Predictions
-pred_learned <- predict_hrfdecoder(fit_hrf, Y_test = Y_test, ev_model_test = ev_model, mode = "trial")
-pred_fixed <- predict_hrfdecoder(fit_fixed, Y_test = Y_test, ev_model_test = ev_model, mode = "trial")
+pred_learned <- predict(fit_hrf, newdata = Y_test, ev_model_test = ev_model, mode = "trial")
+pred_fixed <- predict(fit_fixed, newdata = Y_test, ev_model_test = ev_model, mode = "trial")
 
 # Accuracy (two-class): margin > 0 predicts class A
 true_labels <- ifelse(conditions == "A", 1, -1)
@@ -324,7 +336,6 @@ for (trial in trials) {
   trs_in_window <- get_event_window(trial)
   hrf_weights <- evaluate_hrf(trs_in_window, theta)
   trial_pred <- sum(tr_predictions[trs_in_window] * hrf_weights)
-}
 ```
 
 The [`predict()`](https://rdrr.io/r/stats/predict.html) function with
@@ -378,13 +389,18 @@ cat("Peak delay:", hrf_peak_time - canonical_peak_time, "seconds\n")
 
 ## Next steps
 
-- [Getting Started](01-getting-started.md) — Basic decoder workflow
-- [AR Prewhitening](02-ar-prewhitening.md) — Temporal autocorrelation
-  handling
-- [rMVPA Integration](03-rmvpa-integration.md) — Cross-validation
-  framework
-- [Weakly Supervised Learning](05-weakly-supervised.md) — Full algorithm
-  details
+- [Getting
+  Started](https://bbuchsbaum.github.io/hrfdecoder/articles/01-getting-started.md)
+  — Basic decoder workflow
+- [AR
+  Prewhitening](https://bbuchsbaum.github.io/hrfdecoder/articles/02-ar-prewhitening.md)
+  — Temporal autocorrelation handling
+- [rMVPA
+  Integration](https://bbuchsbaum.github.io/hrfdecoder/articles/03-rmvpa-integration.md)
+  — Cross-validation framework
+- [Weakly Supervised
+  Learning](https://bbuchsbaum.github.io/hrfdecoder/articles/05-weakly-supervised.md)
+  — Full algorithm details
 
 ## Session info
 
@@ -400,7 +416,7 @@ sessioninfo::session_info(pkgs = "hrfdecode")
 #>  collate  en_US.UTF-8
 #>  ctype    en_US.UTF-8
 #>  tz       America/Toronto
-#>  date     2025-11-09
+#>  date     2025-11-10
 #>  pandoc   3.7.0.2 @ /opt/homebrew/bin/ (via rmarkdown)
 #>  quarto   1.7.32 @ /usr/local/bin/quarto
 #> 
@@ -448,7 +464,7 @@ sessioninfo::session_info(pkgs = "hrfdecode")
 #>  filenamer        0.3        2025-04-09 [2] CRAN (R 4.5.0)
 #>  flock            0.7        2016-11-12 [2] CRAN (R 4.5.0)
 #>  fmriAR           0.1.0      2025-10-18 [2] Github (bbuchsbaum/fmriAR@0b10352)
-#>  fmridesign     * 0.5.0      2025-11-09 [2] Github (bbuchsbaum/fmridesign@f1462eb)
+#>  fmridesign     * 0.5.0      2025-11-10 [2] Github (bbuchsbaum/fmridesign@9af622f)
 #>  fmrihrf          0.1.0.9000 2025-11-01 [2] Github (bbuchsbaum/fmrihrf@708058f)
 #>  FNN              1.1.4.1    2024-09-22 [2] CRAN (R 4.5.0)
 #>  fontawesome      0.5.3      2024-11-16 [2] CRAN (R 4.5.0)
@@ -472,7 +488,7 @@ sessioninfo::session_info(pkgs = "hrfdecode")
 #>  hardhat          1.4.2      2025-08-20 [2] CRAN (R 4.5.0)
 #>  highr            0.11       2024-05-26 [2] CRAN (R 4.5.0)
 #>  hms              1.1.4      2025-10-17 [2] CRAN (R 4.5.0)
-#>  hrfdecode      * 0.2.0      2025-11-09 [1] local
+#>  hrfdecode      * 0.2.0      2025-11-10 [1] local
 #>  htmltools        0.5.8.1    2024-04-04 [2] CRAN (R 4.5.0)
 #>  htmlwidgets      1.6.4      2023-12-06 [2] CRAN (R 4.5.0)
 #>  httr             1.4.7      2023-08-15 [2] CRAN (R 4.5.0)
@@ -535,7 +551,7 @@ sessioninfo::session_info(pkgs = "hrfdecode")
 #>  rlang            1.1.6      2025-04-11 [2] CRAN (R 4.5.0)
 #>  rmarkdown        2.30       2025-09-28 [2] CRAN (R 4.5.0)
 #>  rmio             0.4.0      2022-02-17 [2] CRAN (R 4.5.0)
-#>  rMVPA            0.1.2      2025-11-09 [2] local
+#>  rMVPA            0.1.2      2025-11-10 [2] Github (bbuchsbaum/rMVPA@8858610)
 #>  RNifti           1.8.0      2025-02-22 [2] CRAN (R 4.5.0)
 #>  RNiftyReg        2.8.4      2024-09-30 [2] CRAN (R 4.5.0)
 #>  robustbase       0.99-6     2025-09-04 [2] CRAN (R 4.5.0)
@@ -571,7 +587,7 @@ sessioninfo::session_info(pkgs = "hrfdecode")
 #>  yaml             2.3.10     2024-07-26 [2] CRAN (R 4.5.0)
 #>  yardstick        1.3.2      2025-01-22 [2] CRAN (R 4.5.0)
 #> 
-#>  [1] /private/var/folders/9h/nkjq6vss7mqdl4ck7q1hd8ph0000gp/T/RtmpfzOoi1/temp_libpathe6e4ebda2ae
+#>  [1] /private/var/folders/9h/nkjq6vss7mqdl4ck7q1hd8ph0000gp/T/RtmpsnT3u0/temp_libpathad1faeea7f2
 #>  [2] /Users/bbuchsbaum/Library/R/arm64/4.5/library
 #>  [3] /Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/library
 #>  * ── Packages attached to the search path.

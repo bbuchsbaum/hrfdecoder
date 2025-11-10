@@ -21,8 +21,8 @@
     - S3 methods for mvpa_model class
     - Shows how to attach metadata to model specs
 3.  **`/R/hrfdecoder_model.R` (336 lines)** - Already exists!
-    - [`hrfdecoder_model()`](reference/hrfdecoder_model.md) (line
-      97-146) - creates hrfdecoder spec
+    - [`hrfdecoder_model()`](https://bbuchsbaum.github.io/hrfdecoder/reference/hrfdecoder_model.md)
+      (line 97-146) - creates hrfdecoder spec
     - `train_model.hrfdecoder_model()` (line 175-210) - trains decoder
       per fold
     - `format_result.hrfdecoder_model()` (line 216-297) - predicts +
@@ -32,8 +32,8 @@
     - `compute_performance.hrfdecoder_model()` (line 334-336) -
       delegates to perf_fun
 4.  **`/R/hrfdecoder_design.R` (174 lines)** - Already exists!
-    - [`hrfdecoder_design()`](http://bbuchsbaum.github.io/rMVPA/reference/hrfdecoder_design.md)
-      (line 60-130) - extends mvpa_design with event metadata
+    - `hrfdecoder_design()` (line 60-130) - extends mvpa_design with
+      event metadata
     - Validates events, sampling_frame, TR alignment
     - Stores `event_model` and `events` for training
 

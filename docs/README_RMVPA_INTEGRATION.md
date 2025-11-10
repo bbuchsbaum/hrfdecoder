@@ -126,7 +126,8 @@ identically to test data.
 For implementing AR prewhitening in hrfdecoder:
 
 **Add ar_order parameter** to
-[`hrfdecoder_model()`](reference/hrfdecoder_model.md) signature
+[`hrfdecoder_model()`](https://bbuchsbaum.github.io/hrfdecoder/reference/hrfdecoder_model.md)
+signature
 
 - Default: `ar_order = 0` (no whitening)
 - Callable: `hrfdecoder_model(..., ar_order = 2, ...)`
@@ -163,7 +164,7 @@ For implementing AR prewhitening in hrfdecoder:
 
 | Task | File | Lines | Function |
 |----|----|----|----|
-| Model spec creation | `/R/hrfdecoder_model.R` | 97-146 | [`hrfdecoder_model()`](reference/hrfdecoder_model.md) |
+| Model spec creation | `/R/hrfdecoder_model.R` | 97-146 | [`hrfdecoder_model()`](https://bbuchsbaum.github.io/hrfdecoder/reference/hrfdecoder_model.md) |
 | Training | `/R/hrfdecoder_model.R` | 175-210 | `train_model.hrfdecoder_model()` |
 | Prediction | `/R/hrfdecoder_model.R` | 216-297 | `format_result.hrfdecoder_model()` |
 | Fold merging | `/R/hrfdecoder_model.R` | 303-328 | `merge_results.hrfdecoder_model()` |

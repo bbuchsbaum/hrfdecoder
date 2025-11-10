@@ -1,0 +1,395 @@
+---
+title: Understanding HRF estimation
+name: hrf-estimation
+description: Learn how hrfdecoder jointly estimates the hemodynamic response function.
+output:
+  rmarkdown::html_vignette:
+    toc: yes
+    toc_depth: 2
+params:
+  family: lapis
+  base_size: 13
+  content_width: 80
+css: albers.css
+vignette: '%\VignetteIndexEntry{Understanding HRF estimation} %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}'
+includes:
+  in_header: |-
+    <script>document.addEventListener('DOMContentLoaded',()=>document.body.classList.add('palette-red'));</script>
+    <script src="albers.js"></script>
+resource_files:
+- albers.css
+- albers.js
+
+---
+
+```{r setup, include=FALSE}
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>",
+  fig.align = "center",
+  fig.retina = 2,
+  out.width = "100%",
+  message = FALSE,
+  warning = FALSE,
+  fig.width = 7,
+  fig.asp = 0.618
+)
+set.seed(123)
+options(pillar.sigfig = 7, width = 80)
+
+library(ggplot2)
+if (requireNamespace("albersdown", quietly = TRUE)) {
+      ggplot2::theme_set(albersdown::theme_albers(params$family, base_size = params$base_size))
+} else {
+      ggplot2::theme_set(hrfdecode::theme_albers(base_family = params$family, base_size = params$base_size))
+}
+```
+
+## Goal {#goal}
+
+Understand how `hrfdecode` jointly estimates the hemodynamic response function (HRF) alongside decoder weights and soft labels, and how this improves decoding performance.
+
+## TL;DR {#tldr}
+
+```{r tldr, eval=FALSE}
+library(hrfdecode)
+
+# Fit with HRF estimation
+fit <- fit_hrfdecoder(
+  Y = fmri_data,
+  ev_model = ev_model,
+  base_model = bl_model,
+  hrf_basis = "spmg1",      # SPM canonical + derivative
+  lambda_HRF = 0.01         # Prior weight on canonical HRF
+)
+
+# Extract learned HRF
+theta_learned <- fit$theta
+hrf_basis <- fmrihrf::evaluate(fmrihrf::getHRF("spmg2"), 1:20)
+hrf_learned <- hrf_basis %*% theta_learned
+
+# Compare to canonical
+hrf_canonical <- hrf_basis %*% c(1, 0)
+```
+
+## Why estimate HRF? {#why-hrf}
+
+The hemodynamic response function (HRF) describes how neural activity is transformed into the BOLD signal measured by fMRI. Traditional analyses assume a **canonical HRF** that:
+
+- Peaks around 5-6 seconds post-stimulus
+- Returns to baseline by 20-30 seconds
+- Has a fixed shape across subjects, regions, and conditions
+
+However, the true HRF varies due to:
+
+- **Individual differences**: Vascular anatomy, age, physiology
+- **Regional heterogeneity**: Visual cortex vs. prefrontal cortex
+- **Task demands**: Sustained vs. transient responses
+- **Pathology**: Clinical populations may show altered hemodynamics
+
+**Joint estimation** allows the HRF to adapt to data while being regularized toward a canonical prior.
+
+## HRF basis functions {#hrf-basis}
+
+Instead of estimating arbitrary HRF shapes, we use **basis sets** that span a flexible family of plausible shapes.
+
+### SPM canonical + derivative (spmg2) {#spmg2}
+
+The most common basis:
+
+- **Canonical HRF**: Standard double-gamma function
+- **Temporal derivative**: Allows timing shifts (earlier/later peaks)
+
+```{r plot-spmg1-basis, fig.cap="SPM canonical HRF and its temporal derivative. The derivative captures timing variations while the canonical captures amplitude."}
+if (requireNamespace("ggplot2", quietly = TRUE)) {
+  library(ggplot2)
+
+  # Generate SPM basis (canonical + derivative)
+  time_points <- 0:20
+  hrf_basis <- fmrihrf::evaluate(fmrihrf::getHRF("spmg2"), time_points)
+
+  # Create plot data
+  plot_df <- data.frame(
+    time = rep(time_points, 2),
+    amplitude = c(hrf_basis[, 1], hrf_basis[, 2]),
+    component = rep(c("Canonical", "Derivative"), each = length(time_points))
+  )
+
+  ggplot(plot_df, aes(x = time, y = amplitude, color = component)) +
+    geom_line(linewidth = 1.2) +
+    (if (requireNamespace("albersdown", quietly = TRUE)) albersdown::scale_color_albers(params$family) else ggplot2::scale_color_discrete()) +
+    labs(
+      title = "SPM HRF basis functions",
+      subtitle = "Canonical + temporal derivative allow flexible HRF shapes",
+      x = "Time (seconds)",
+      y = "Amplitude",
+      color = "Component"
+    )
+}
+```
+
+### Other basis sets {#other-bases}
+
+- **spmg2**: Canonical + derivative + dispersion (3 components)
+- **gamma**: Gamma function basis
+- **fir**: Finite impulse response (non-parametric, high-dimensional)
+
+For most applications, `spmg1` provides a good balance of flexibility and parsimony.
+
+## Joint estimation framework {#joint-estimation}
+
+`hrfdecode` simultaneously optimizes three components:
+
+1. **Soft labels** (y): Continuous trial predictions
+2. **HRF coefficients** (θ): Weights on basis functions
+3. **Decoder weights** (W): Voxel-wise classification weights
+
+The optimization alternates between these via ALS (alternating least squares):
+
+```
+Repeat until convergence:
+  1. Fix θ, W  →  Update y (soft labels)
+  2. Fix y, W  →  Update θ (HRF)
+  3. Fix y, θ  →  Update W (decoder)
+```
+
+### HRF prior regularization {#hrf-prior}
+
+The `lambda_HRF` parameter controls adherence to the canonical HRF:
+
+- **lambda_HRF = 0**: No prior, fully data-driven HRF
+- **lambda_HRF = ∞**: Fixed canonical HRF (no adaptation)
+- **lambda_HRF = 0.01** (default): Gentle pull toward canonical
+
+This prevents overfitting when data is limited while allowing adaptation when signal is strong.
+
+## Simulating HRF variation {#simulation}
+
+Let's simulate data with a non-canonical HRF and see if `hrfdecode` recovers it.
+
+```{r simulate-hrf-variation}
+library(hrfdecode)
+library(fmridesign)
+
+# Setup
+n_trs <- 200
+n_voxels <- 40
+n_trials <- 40
+tr <- 2
+
+# Event table
+onsets <- seq(10, n_trs * tr - 20, length.out = n_trials)
+conditions <- rep(c("A", "B"), each = n_trials / 2)
+event_table <- data.frame(onset = onsets, condition = conditions, duration = 1)
+
+# Design
+  ev_model <- event_model(
+  onset ~ hrf(condition, basis = "spmg1"),
+  data = event_table,
+  block = ~ 1,
+  sampling_frame = fmrihrf::sampling_frame(TR = tr, blocklens = n_trs)
+)
+  bl_model <- baseline_model(basis = "bs", degree = 3,
+                           sframe = fmrihrf::sampling_frame(TR = tr, blocklens = n_trs))
+
+# Simulate with SHIFTED HRF (delayed peak)
+hrf_basis <- fmrihrf::evaluate(fmrihrf::getHRF("spmg2"), 1:20)
+theta_true <- c(1, 0.5)  # Positive derivative → delayed peak
+hrf_shifted <- as.numeric(hrf_basis %*% theta_true)
+
+# Generate TR-grid sticks and convolve with shifted HRF
+stick_A <- rep(0, n_trs)
+stick_B <- rep(0, n_trs)
+idx_A <- pmin(n_trs, pmax(1L, floor(event_table$onset[event_table$condition == "A"] / tr) + 1L))
+idx_B <- pmin(n_trs, pmax(1L, floor(event_table$onset[event_table$condition == "B"] / tr) + 1L))
+stick_A[idx_A] <- 1
+stick_B[idx_B] <- 1
+signal <- stick_A - stick_B
+
+# Sample shifted HRF at TR grid
+hrf_obj2 <- fmrihrf::getHRF("spmg2")
+span2 <- attr(hrf_obj2, "span") %||% 24
+K2 <- max(1L, ceiling(span2 / tr))
+tgrid2 <- seq(0, (K2 - 1L) * tr, by = tr)
+hrf_basis_tr <- fmrihrf::evaluate(hrf_obj2, tgrid2)
+hrf_shifted_tr <- as.numeric(hrf_basis_tr %*% theta_true)
+signal_conv <- stats::convolve(signal, rev(hrf_shifted_tr), type = "open")[1:n_trs]
+
+# Add noise
+Y_sim <- matrix(rnorm(n_trs * n_voxels), n_trs, n_voxels)
+for (v in 1:n_voxels) {
+  Y_sim[, v] <- Y_sim[, v] + signal_conv * (v <= n_voxels / 2) * 0.6
+}
+```
+
+Fit with HRF estimation:
+
+```{r fit-with-hrf}
+fit_hrf <- fit_hrfdecoder(
+  Y = Y_sim,
+  ev_model = ev_model,
+  base_model = bl_model,
+  hrf = fmrihrf::getHRF("spmg2"),
+  lambda_W = 0.1,
+  lambda_HRF = 0.01,
+  verbose = FALSE
+)
+
+# Extract learned HRF
+theta_learned <- fit_hrf$theta
+hrf_learned <- hrf_basis %*% theta_learned
+```
+
+Compare learned vs. true HRF:
+
+```{r compare-hrf}
+cat("True theta:", round(theta_true, 3), "\n")
+cat("Learned theta:", round(theta_learned, 3), "\n")
+```
+
+```{r plot-hrf-recovery, fig.cap="HRF recovery: the learned HRF (blue) closely matches the true shifted HRF (red), demonstrating successful joint estimation."}
+if (requireNamespace("ggplot2", quietly = TRUE)) {
+  library(ggplot2)
+
+  # Use the same TR grid used above for shifted HRF
+  time_points <- tgrid2
+  hrf_canonical <- as.numeric(hrf_basis_tr %*% c(1, 0))
+  hrf_learned_tr <- as.numeric(hrf_basis_tr %*% theta_learned)
+
+  plot_df <- data.frame(
+    time = rep(time_points, 3),
+    amplitude = c(hrf_shifted_tr, hrf_learned_tr, hrf_canonical),
+    type = rep(c("True (shifted)", "Learned", "Canonical"), each = length(time_points))
+  )
+
+  ggplot(plot_df, aes(x = time, y = amplitude, color = type, linetype = type)) +
+    geom_line(linewidth = 1.2) +
+    scale_linetype_manual(values = c("Canonical" = "dashed", "Learned" = "solid", "True (shifted)" = "solid")) +
+    (if (requireNamespace("albersdown", quietly = TRUE)) albersdown::scale_color_albers(params$family) else ggplot2::scale_color_discrete()) +
+    labs(
+      title = "HRF estimation from simulated data",
+      subtitle = "Joint estimation recovers the true delayed-peak HRF",
+      x = "Time (seconds)",
+      y = "Amplitude",
+      color = "HRF type",
+      linetype = "HRF type"
+    )
+}
+```
+
+The learned HRF closely approximates the true shifted HRF, demonstrating successful recovery.
+
+## Impact on decoding {#impact-on-decoding}
+
+Does estimating the HRF actually improve decoding performance? Let's compare fixed vs. learned HRF.
+
+```{r compare-fixed-vs-learned}
+# Fit with FIXED canonical HRF (lambda_HRF = infinity approximation)
+# We simulate this by using a very high lambda_HRF
+fit_fixed <- fit_hrfdecoder(
+  Y = Y_sim,
+  ev_model = ev_model,
+  base_model = bl_model,
+  lambda_W = 0.1,
+  lambda_HRF = 100,  # Strong prior → nearly fixed HRF
+  verbose = FALSE
+)
+
+# Test data
+Y_test <- matrix(rnorm(n_trs * n_voxels), n_trs, n_voxels)
+for (v in 1:n_voxels) {
+  Y_test[, v] <- Y_test[, v] + signal_conv * (v <= n_voxels / 2) * 0.6
+}
+
+# Predictions
+pred_learned <- predict_hrfdecoder(fit_hrf, Y_test = Y_test, ev_model_test = ev_model, mode = "trial")
+pred_fixed <- predict_hrfdecoder(fit_fixed, Y_test = Y_test, ev_model_test = ev_model, mode = "trial")
+
+# Accuracy (two-class): margin > 0 predicts class A
+true_labels <- ifelse(conditions == "A", 1, -1)
+margin_learned <- as.numeric(pred_learned$probs[,1] - pred_learned$probs[,2])
+margin_fixed <- as.numeric(pred_fixed$probs[,1] - pred_fixed$probs[,2])
+acc_learned <- mean(sign(margin_learned) == true_labels)
+acc_fixed <- mean(sign(margin_fixed) == true_labels)
+
+cat("Accuracy (learned HRF):", round(acc_learned * 100, 1), "%\n")
+cat("Accuracy (fixed HRF):", round(acc_fixed * 100, 1), "%\n")
+cat("Improvement:", round((acc_learned - acc_fixed) * 100, 1), "percentage points\n")
+```
+
+When the true HRF deviates from canonical, **learning the HRF improves decoding**.
+
+## Trial aggregation with HRF weighting {#trial-aggregation}
+
+When predicting at trial level (`mode = "trial"`), predictions are aggregated across the event window. This aggregation uses **HRF-weighted averaging**:
+
+1. Generate predicted BOLD for each trial using learned HRF
+2. Compute prediction at each TR within trial window
+3. Weight each TR prediction by HRF amplitude
+4. Sum weighted predictions to get trial-level score
+
+This accounts for the fact that different TRs within a trial contribute differently based on hemodynamic timing.
+
+```{r trial-aggregation-concept, eval=FALSE}
+# Conceptual pseudocode for trial aggregation:
+for (trial in trials) {
+  trs_in_window <- get_event_window(trial)
+  hrf_weights <- evaluate_hrf(trs_in_window, theta)
+  trial_pred <- sum(tr_predictions[trs_in_window] * hrf_weights)
+```
+
+The `predict()` function with `mode = "trial"` handles this automatically using the learned HRF.
+
+## When does HRF estimation help most? {#when-hrf-helps}
+
+HRF estimation is most beneficial when:
+
+1. **HRF varies from canonical**: Unusual populations, regions, or tasks
+2. **Timing precision matters**: Rapid event-related designs
+3. **Multi-region analysis**: Different areas have different HRFs
+4. **High SNR**: Sufficient signal to estimate HRF reliably
+
+HRF estimation may hurt when:
+
+1. **Low SNR**: Not enough signal to distinguish HRF from noise
+2. **Short experiments**: Too few events to constrain HRF
+3. **Perfect canonical**: When canonical is actually correct (rare)
+
+In practice, using a **gentle prior** (`lambda_HRF = 0.01`) provides insurance: if the HRF is canonical, learned θ ≈ (1, 0); if not, it adapts.
+
+## Inspecting learned HRFs {#inspecting-hrf}
+
+```{r inspect-hrf-components}
+# Basis coefficients
+cat("HRF basis coefficients (theta):\n")
+print(round(theta_learned, 3))
+
+# Peak time
+hrf_peak_idx <- which.max(hrf_learned)
+hrf_peak_time <- (hrf_peak_idx - 1)  # Adjust for 0-indexing
+cat("\nLearned HRF peaks at:", hrf_peak_time, "seconds\n")
+
+# Compare to canonical peak
+canonical_peak_idx <- which.max(hrf_canonical)
+canonical_peak_time <- (canonical_peak_idx - 1)
+cat("Canonical HRF peaks at:", canonical_peak_time, "seconds\n")
+cat("Peak delay:", hrf_peak_time - canonical_peak_time, "seconds\n")
+```
+
+## Next steps {#next-steps}
+
+- [Getting Started](01-getting-started.html) — Basic decoder workflow
+- [AR Prewhitening](02-ar-prewhitening.html) — Temporal autocorrelation handling
+- [rMVPA Integration](03-rmvpa-integration.html) — Cross-validation framework
+- [Weakly Supervised Learning](05-weakly-supervised.html) — Full algorithm details
+
+## Session info {#session-info}
+
+```{r session-info}
+sessioninfo::session_info(pkgs = "hrfdecode")
+```

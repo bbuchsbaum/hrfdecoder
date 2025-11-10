@@ -47,7 +47,8 @@ separation of concerns across the preprocessing pipeline.
 
 **Evidence from hrfdecoder:**
 
-- **File:** [src/softlabels_als.cpp:39](../src/softlabels_als.cpp#L39)
+- **File:**
+  [src/softlabels_als.cpp:39](https://bbuchsbaum.github.io/src/softlabels_als.cpp#L39)
 
   ``` cpp
   recon = arma::accu(arma::square(S - P));  // Assumes i.i.d. noise
@@ -80,14 +81,14 @@ implemented)
 
 **Evidence from hrfdecoder:**
 
-- **File:** [R/fit.R:40](../R/fit.R#L40)
+- **File:** [R/fit.R:40](https://bbuchsbaum.github.io/R/fit.R#L40)
 
   ``` r
   Y <- residualize_baseline(Y, base_model)  # BEFORE any fitting
   ```
 
 - **Implementation:**
-  [R/interop_fmri.R:44-46](../R/interop_fmri.R#L44-L46)
+  [R/interop_fmri.R:44-46](https://bbuchsbaum.github.io/R/interop_fmri.R#L44-L46)
 
   ``` r
   residualize_baseline <- function(Y, base_model = NULL) {
@@ -244,7 +245,7 @@ compute_performance(obj, result, ...)
 ```
 
 **hrfdecoder integration:** **File:**
-[R/hrfdecoder_model.R](../R/hrfdecoder_model.R)
+[R/hrfdecoder_model.R](https://bbuchsbaum.github.io/R/hrfdecoder_model.R)
 
 Already implements all required S3 methods: -
 `train_model.hrfdecoder_model()` (lines 48-71) -
@@ -680,8 +681,10 @@ train_model.hrfdecoder_model <- function(obj, train_dat, y, sl_info, cv_spec, in
     - Add helper `get_run_ids_from_test_data()`
 3.  **`R/hrfdecoder_model.R`**
     - Add AR parameters to
-      [`hrfdecoder_model()`](reference/hrfdecoder_model.md) signature
-    - Pass through to [`fit_hrfdecoder()`](reference/fit_hrfdecoder.md)
+      [`hrfdecoder_model()`](https://bbuchsbaum.github.io/hrfdecoder/reference/hrfdecoder_model.md)
+      signature
+    - Pass through to
+      [`fit_hrfdecoder()`](https://bbuchsbaum.github.io/hrfdecoder/reference/fit_hrfdecoder.md)
       in
       [`train_model()`](http://bbuchsbaum.github.io/rMVPA/reference/train_model.md)
 4.  **`DESCRIPTION`**
@@ -1114,7 +1117,7 @@ results <- run_searchlight(spec, radius = 8, method = "randomized", niter = 4)
 - rMVPA model plugin guide:
   [custom-models.Rmd](https://github.com/bbuchsbaum/rMVPA/blob/master/vignettes/custom-models.Rmd)
 - hrfdecoder design notes:
-  [notes/hrf_weakly_supervised_decoder.md](../notes/hrf_weakly_supervised_decoder.md)
+  [notes/hrf_weakly_supervised_decoder.md](https://bbuchsbaum.github.io/notes/hrf_weakly_supervised_decoder.md)
 
 ------------------------------------------------------------------------
 

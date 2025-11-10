@@ -8,16 +8,18 @@
 
 ### 1. Package Dependencies
 
-**Files Modified:** - [DESCRIPTION](DESCRIPTION) - Added
-`fmriAR (>= 0.3.0)` to Imports and Remotes - [NAMESPACE](NAMESPACE) -
-Added imports for
+**Files Modified:** -
+[DESCRIPTION](https://bbuchsbaum.github.io/hrfdecoder/DESCRIPTION) -
+Added `fmriAR (>= 0.3.0)` to Imports and Remotes -
+[NAMESPACE](https://bbuchsbaum.github.io/hrfdecoder/NAMESPACE) - Added
+imports for
 [`fmriAR::fit_noise`](https://bbuchsbaum.github.io/fmriAR/reference/fit_noise.html)
 and
 [`fmriAR::whiten_apply`](https://bbuchsbaum.github.io/fmriAR/reference/whiten_apply.html)
 
 ### 2. Core Fitting Function
 
-**File:** [R/fit.R](R/fit.R)
+**File:** [R/fit.R](https://bbuchsbaum.github.io/hrfdecoder/R/fit.R)
 
 **New Parameters:** - `ar_order` - AR order for prewhitening (default:
 `NULL` for no AR). Set to `1` for AR(1), `2` for AR(2), or `"auto"` for
@@ -47,12 +49,13 @@ settings stored in `fit$settings` (ar_order, ar_method, ar_pooling)
 
 ### 3. Prediction Function
 
-**File:** [R/predict.R](R/predict.R)
+**File:**
+[R/predict.R](https://bbuchsbaum.github.io/hrfdecoder/R/predict.R)
 
 **Changes:** - AR prewhitening applied to test data BEFORE
 standardization (lines 24-33) - Uses stored `fit$preproc$ar_plan` from
 training - New helper function
-[`.get_run_ids_from_test_data()`](reference/dot-get_run_ids_from_test_data.md)
+[`.get_run_ids_from_test_data()`](https://bbuchsbaum.github.io/hrfdecoder/reference/dot-get_run_ids_from_test_data.md)
 (lines 107-122) extracts run IDs for test data from: 1. `ev_model_test`
 if provided 2. Training run_ids if test length matches 3. Default to
 single run otherwise
@@ -67,14 +70,15 @@ single run otherwise
 
 ### 4. rMVPA Integration
 
-**File:** [R/hrfdecoder_model.R](R/hrfdecoder_model.R)
+**File:**
+[R/hrfdecoder_model.R](https://bbuchsbaum.github.io/hrfdecoder/R/hrfdecoder_model.R)
 
 **Changes:** - Added AR parameters to
-[`hrfdecoder_model()`](reference/hrfdecoder_model.md) signature (lines
-16-18) - Default: `ar_order = 1` (enables AR(1) by default for rMVPA) -
-AR parameters passed through to
-[`fit_hrfdecoder()`](reference/fit_hrfdecoder.md) in
-`train_model.hrfdecoder_model()` (lines 75-77)
+[`hrfdecoder_model()`](https://bbuchsbaum.github.io/hrfdecoder/reference/hrfdecoder_model.md)
+signature (lines 16-18) - Default: `ar_order = 1` (enables AR(1) by
+default for rMVPA) - AR parameters passed through to
+[`fit_hrfdecoder()`](https://bbuchsbaum.github.io/hrfdecoder/reference/fit_hrfdecoder.md)
+in `train_model.hrfdecoder_model()` (lines 75-77)
 
 **Usage:**
 
@@ -93,7 +97,7 @@ spec <- hrfdecoder_model(
 ### 5. Comprehensive Tests
 
 **File:**
-[tests/testthat/test-ar-prewhitening.R](tests/testthat/test-ar-prewhitening.R)
+[tests/testthat/test-ar-prewhitening.R](https://bbuchsbaum.github.io/hrfdecoder/tests/testthat/test-ar-prewhitening.R)
 
 **Test Coverage:** 1. ✅ AR(1) prewhitening reduces autocorrelation 2.
 ✅ Run-specific AR parameters estimated and applied 3. ✅ AR parameters
@@ -256,7 +260,7 @@ already blocks smoothing across runs (consistent design)
 ### 4. rMVPA Default
 
 **Default:** `ar_order = 1` in
-[`hrfdecoder_model()`](reference/hrfdecoder_model.md)
+[`hrfdecoder_model()`](https://bbuchsbaum.github.io/hrfdecoder/reference/hrfdecoder_model.md)
 
 **Rationale:** - Most fMRI data exhibits AR(1) autocorrelation - Enables
 prewhitening by default for rMVPA users - Can be disabled with
@@ -265,7 +269,7 @@ prewhitening by default for rMVPA users - Can be disabled with
 ### 5. Backward Compatibility
 
 **Mechanism:** `ar_order = NULL` (default in standalone
-[`fit_hrfdecoder()`](reference/fit_hrfdecoder.md))
+[`fit_hrfdecoder()`](https://bbuchsbaum.github.io/hrfdecoder/reference/fit_hrfdecoder.md))
 
 **Guarantees:** - Existing code without AR parameters runs unchanged -
 `ar_order = NULL` or `ar_order = 0` produces identical results to pre-AR
@@ -301,7 +305,7 @@ O(R × p) where R = number of runs - Typical footprint: \<1 MB
 ### Unit Tests
 
 All tests in
-[tests/testthat/test-ar-prewhitening.R](tests/testthat/test-ar-prewhitening.R):
+[tests/testthat/test-ar-prewhitening.R](https://bbuchsbaum.github.io/hrfdecoder/tests/testthat/test-ar-prewhitening.R):
 
 - ✅ Decorrelation verification
 - ✅ Multi-run handling
@@ -373,10 +377,10 @@ All tests in
 
 ### Updated Files
 
-1.  **[R/fit.R](R/fit.R)** - Roxygen docs for AR parameters (lines
-    16-22)
-2.  **[R/hrfdecoder_model.R](R/hrfdecoder_model.R)** - Roxygen docs for
-    rMVPA AR params (lines 2-4)
+1.  **[R/fit.R](https://bbuchsbaum.github.io/hrfdecoder/R/fit.R)** -
+    Roxygen docs for AR parameters (lines 16-22)
+2.  **[R/hrfdecoder_model.R](https://bbuchsbaum.github.io/hrfdecoder/R/hrfdecoder_model.R)** -
+    Roxygen docs for rMVPA AR params (lines 2-4)
 
 ### Additional Documentation Needed
 
@@ -396,10 +400,10 @@ All tests in
 ### Related Documentation
 
 - **Integration Plan:**
-  [AR_PREWHITENING_INTEGRATION_PLAN.md](AR_PREWHITENING_INTEGRATION_PLAN.md)
+  [AR_PREWHITENING_INTEGRATION_PLAN.md](https://bbuchsbaum.github.io/hrfdecoder/AR_PREWHITENING_INTEGRATION_PLAN.md)
 - **fmriAR Package:** `/Users/bbuchsbaum/code/fmriAR`
 - **Design Notes:**
-  [notes/hrf_weakly_supervised_decoder.md](notes/hrf_weakly_supervised_decoder.md)
+  [notes/hrf_weakly_supervised_decoder.md](https://bbuchsbaum.github.io/hrfdecoder/notes/hrf_weakly_supervised_decoder.md)
   Section 4
 
 ### Key Papers

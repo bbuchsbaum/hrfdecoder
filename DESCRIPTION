@@ -8,6 +8,7 @@ License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
 LinkingTo: Rcpp, RcppArmadillo
+URL: https://bbuchsbaum.github.io/hrfdecoder
 Imports:
     Rcpp,
     RcppArmadillo,
@@ -28,6 +29,6 @@ Suggests:
     viridisLite,
     sessioninfo
 Config/testthat/edition: 3
-Config/Needs/website: bbuchsbaum/albersdown
+Config/Needs/website: bbuchsbaum/albersdown, albersdown
 VignetteBuilder: knitr
 RoxygenNote: 7.3.3

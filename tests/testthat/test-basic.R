@@ -24,6 +24,6 @@ test_that("fit_hrfdecoder runs on synthetic data", {
     verbose = 0
   )
   expect_equal(nrow(fit$P), 60)
-  preds <- predict_hrfdecoder(fit, Y, ev_model_test = evmod, mode = "trial")
+  preds <- predict(fit, newdata = Y, ev_model_test = evmod, mode = "trial")
   expect_equal(ncol(preds$probs), length(fit$conditions))
 })

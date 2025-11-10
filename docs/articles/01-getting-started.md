@@ -19,7 +19,7 @@ fit <- fit_hrfdecoder(
 )
 
 # Predict on new data
-preds <- predict_hrfdecoder(fit, Y_test = test_data, mode = "trial")
+preds <- predict(fit, newdata = test_data, mode = "trial")
 ```
 
 ## Introduction
@@ -126,8 +126,8 @@ dim(Y_train)
 ## Fitting the decoder
 
 Now we fit the decoder using
-[`fit_hrfdecoder()`](../reference/fit_hrfdecoder.md). The key arguments
-are:
+[`fit_hrfdecoder()`](https://bbuchsbaum.github.io/hrfdecoder/reference/fit_hrfdecoder.md).
+The key arguments are:
 
 - `Y`: The fMRI data matrix (time × voxels)
 - `event_model`: Event design from `fmridesign`
@@ -210,16 +210,16 @@ for (v in 1:n_voxels) {
 }
 
 # TR-level predictions
-pred_tr <- predict_hrfdecoder(fit, Y_test = Y_test, mode = "tr")
-length(pred_tr)  # One prediction per TR
-#> [1] 600
+pred_tr <- predict(fit, newdata = Y_test, mode = "tr")
+nrow(pred_tr)  # One prediction per TR
+#> [1] 200
 ```
 
 ``` r
 # Trial-level predictions (aggregated within event windows)
-pred_trial <- predict_hrfdecoder(fit, Y_test = Y_test, ev_model_test = ev_model, mode = "trial")
-length(pred_trial)  # One prediction per trial
-#> [1] 2
+pred_trial <- predict(fit, newdata = Y_test, ev_model_test = ev_model, mode = "trial")
+nrow(pred_trial$probs)  # One prediction per trial
+#> [1] 40
 ```
 
 Trial-level predictions aggregate the TR-level signal using HRF-weighted
@@ -253,10 +253,16 @@ if (requireNamespace("ggplot2", quietly = TRUE)) {
     condition = conditions
   )
 
+  scl <- if (requireNamespace("albersdown", quietly = TRUE)) {
+    albersdown::scale_color_albers(params$family)
+  } else {
+    ggplot2::scale_color_discrete()
+  }
+
   ggplot(plot_df, aes(x = trial, y = prediction, color = condition)) +
     geom_point(size = 2.5) +
     geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
-    hrfdecode::scale_color_albers() +
+    scl +
     labs(
       title = "Trial-level decoder predictions",
       subtitle = "Weakly supervised decoder correctly separates conditions",
@@ -279,14 +285,18 @@ indicate condition A, negative values condition B.
 This tutorial covered the basics of fitting and predicting with
 `hrfdecode`. For more advanced topics:
 
-- [AR Prewhitening](02-ar-prewhitening.md) — Handle temporal
-  autocorrelation in multi-run data
-- [rMVPA Integration](03-rmvpa-integration.md) — Run searchlight
-  analysis with cross-validation
-- [HRF Estimation](04-hrf-estimation.md) — Understand joint HRF learning
-  and event aggregation
-- [Weakly Supervised Learning](05-weakly-supervised.md) — Deep dive into
-  the ALS algorithm
+- [AR
+  Prewhitening](https://bbuchsbaum.github.io/hrfdecoder/articles/02-ar-prewhitening.md)
+  — Handle temporal autocorrelation in multi-run data
+- [rMVPA
+  Integration](https://bbuchsbaum.github.io/hrfdecoder/articles/03-rmvpa-integration.md)
+  — Run searchlight analysis with cross-validation
+- [HRF
+  Estimation](https://bbuchsbaum.github.io/hrfdecoder/articles/04-hrf-estimation.md)
+  — Understand joint HRF learning and event aggregation
+- [Weakly Supervised
+  Learning](https://bbuchsbaum.github.io/hrfdecoder/articles/05-weakly-supervised.md)
+  — Deep dive into the ALS algorithm
 
 ## Session info
 
@@ -302,7 +312,7 @@ sessioninfo::session_info(pkgs = "hrfdecode")
 #>  collate  en_US.UTF-8
 #>  ctype    en_US.UTF-8
 #>  tz       America/Toronto
-#>  date     2025-11-09
+#>  date     2025-11-10
 #>  pandoc   3.7.0.2 @ /opt/homebrew/bin/ (via rmarkdown)
 #>  quarto   1.7.32 @ /usr/local/bin/quarto
 #> 
@@ -350,7 +360,7 @@ sessioninfo::session_info(pkgs = "hrfdecode")
 #>  filenamer        0.3        2025-04-09 [2] CRAN (R 4.5.0)
 #>  flock            0.7        2016-11-12 [2] CRAN (R 4.5.0)
 #>  fmriAR           0.1.0      2025-10-18 [2] Github (bbuchsbaum/fmriAR@0b10352)
-#>  fmridesign     * 0.5.0      2025-11-09 [2] Github (bbuchsbaum/fmridesign@f1462eb)
+#>  fmridesign     * 0.5.0      2025-11-10 [2] Github (bbuchsbaum/fmridesign@9af622f)
 #>  fmrihrf          0.1.0.9000 2025-11-01 [2] Github (bbuchsbaum/fmrihrf@708058f)
 #>  FNN              1.1.4.1    2024-09-22 [2] CRAN (R 4.5.0)
 #>  fontawesome      0.5.3      2024-11-16 [2] CRAN (R 4.5.0)
@@ -374,7 +384,7 @@ sessioninfo::session_info(pkgs = "hrfdecode")
 #>  hardhat          1.4.2      2025-08-20 [2] CRAN (R 4.5.0)
 #>  highr            0.11       2024-05-26 [2] CRAN (R 4.5.0)
 #>  hms              1.1.4      2025-10-17 [2] CRAN (R 4.5.0)
-#>  hrfdecode      * 0.2.0      2025-11-09 [1] local
+#>  hrfdecode      * 0.2.0      2025-11-10 [1] local
 #>  htmltools        0.5.8.1    2024-04-04 [2] CRAN (R 4.5.0)
 #>  htmlwidgets      1.6.4      2023-12-06 [2] CRAN (R 4.5.0)
 #>  httr             1.4.7      2023-08-15 [2] CRAN (R 4.5.0)
@@ -437,7 +447,7 @@ sessioninfo::session_info(pkgs = "hrfdecode")
 #>  rlang            1.1.6      2025-04-11 [2] CRAN (R 4.5.0)
 #>  rmarkdown        2.30       2025-09-28 [2] CRAN (R 4.5.0)
 #>  rmio             0.4.0      2022-02-17 [2] CRAN (R 4.5.0)
-#>  rMVPA            0.1.2      2025-11-09 [2] local
+#>  rMVPA            0.1.2      2025-11-10 [2] Github (bbuchsbaum/rMVPA@8858610)
 #>  RNifti           1.8.0      2025-02-22 [2] CRAN (R 4.5.0)
 #>  RNiftyReg        2.8.4      2024-09-30 [2] CRAN (R 4.5.0)
 #>  robustbase       0.99-6     2025-09-04 [2] CRAN (R 4.5.0)
@@ -473,7 +483,7 @@ sessioninfo::session_info(pkgs = "hrfdecode")
 #>  yaml             2.3.10     2024-07-26 [2] CRAN (R 4.5.0)
 #>  yardstick        1.3.2      2025-01-22 [2] CRAN (R 4.5.0)
 #> 
-#>  [1] /private/var/folders/9h/nkjq6vss7mqdl4ck7q1hd8ph0000gp/T/RtmpfzOoi1/temp_libpathe6e4ebda2ae
+#>  [1] /private/var/folders/9h/nkjq6vss7mqdl4ck7q1hd8ph0000gp/T/RtmpsnT3u0/temp_libpathad1faeea7f2
 #>  [2] /Users/bbuchsbaum/Library/R/arm64/4.5/library
 #>  [3] /Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/library
 #>  * ── Packages attached to the search path.
