@@ -12,7 +12,8 @@ predict_hrfdecoder <- function(object, Y_test,
                                ev_model_test = NULL,
                                mode = c("tr", "trial"),
                                window = c(4, 8),
-                               weights = c("hrf", "flat")) {
+                               weights = c("hrf", "flat"),
+                               normalize = TRUE) {
   # Gentle deprecation notice; can be silenced via option
   if (isTRUE(getOption("hrfdecode.deprecate.predict_hrfdecoder", TRUE))) {
     .Deprecated("predict", package = "hrfdecode",
@@ -54,7 +55,9 @@ predict_hrfdecoder <- function(object, Y_test,
   }
   stopifnot(inherits(ev_model_test, "event_model"))
   events_tbl <- get_event_table(ev_model_test)
-  P_event <- probs[, seq_along(object$conditions), drop = FALSE]
+  # For trial aggregation, allow aggregating raw scores when normalize=FALSE to preserve amplitude information
+  P_source <- if (isTRUE(normalize)) probs else scores
+  P_event <- P_source[, seq_along(object$conditions), drop = FALSE]
   hrf_weights <- if (weights == "hrf") object$hrf else NULL
   agg <- aggregate_events(
     P = P_event,
@@ -63,7 +66,7 @@ predict_hrfdecoder <- function(object, Y_test,
     conditions = object$conditions,
     window = window,
     hrf = hrf_weights,
-    normalize = TRUE
+    normalize = normalize
   )
   agg
 }
@@ -89,6 +92,7 @@ predict.hrfdecoder_fit <- function(object, newdata,
                                    mode = c("tr", "trial"),
                                    window = c(4, 8),
                                    weights = c("hrf", "flat"),
+                                   normalize = TRUE,
                                    ...) {
   if (missing(newdata)) stop("newdata must be supplied for predict().")
   Y_test <- as.matrix(newdata)
@@ -98,7 +102,8 @@ predict.hrfdecoder_fit <- function(object, newdata,
     ev_model_test = ev_model_test,
     mode = mode,
     window = window,
-    weights = weights
+    weights = weights,
+    normalize = normalize
   )
 }
 
@@ -145,7 +150,20 @@ aggregate_events <- function(P, events, TR, conditions,
     nz <- rs > 0
     if (any(nz)) probs[nz, ] <- probs[nz, , drop = FALSE] / rs[nz]
   }
-  y_true <- factor(events$condition, levels = conditions)
+  # Map events$condition to fitted conditions by matching suffix
+  # e.g., "A" -> "condition.A", "B" -> "condition.B"
+  event_cond <- events$condition
+  # Try direct match first
+  y_true <- factor(event_cond, levels = conditions)
+  # If all NA, try matching by suffix (strip prefix from conditions)
+  if (all(is.na(y_true))) {
+    # Extract suffix after last dot (e.g., "condition.A" -> "A")
+    cond_suffix <- sub(".*\\.", "", conditions)
+    # Build mapping from event labels to fitted labels
+    idx_map <- match(event_cond, cond_suffix)
+    mapped_cond <- conditions[idx_map]
+    y_true <- factor(mapped_cond, levels = conditions)
+  }
   list(probs = probs, y_true = y_true)
 }
 
